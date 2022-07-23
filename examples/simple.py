@@ -1,40 +1,52 @@
+"""
+A simple async example to use aiooss2
+"""
 import asyncio
-from aiooss2 import Auth, Bucket, ObjectIterator
+import os
 
-OSS_ACCESS_KEY_ID = "xxx"
-OSS_SECRET_ACCESS_KEY = "xxx"
+from aiooss2 import AioBucket, AioObjectIterator, Auth
 
-
-async def go():
-    bucket = 'aiooss2-test'
-    filename = 'your_file'
-    newfile = 'new_file'
-    folder = 'readme'
-    file_obj = f'{folder}/{filename}'
-    data_obj = f'{folder}/{data}'
+OSS_ACCESS_KEY_ID = os.environ.get("OSS_ACCESS_KEY_ID")
+OSS_SECRET_ACCESS_KEY = os.environ.get("OSS_SECRET_ACCESS_KEY")
+BUCKET_NAME = os.environ.get("OSS_TEST_BUCKET_NAME")
 
 
-    auth = Auth(OSS_ACCESS_KEY_ID , OSS_SECRET_ACCESS_KEY)
-    bucket = Bucket(auth, 'http://oss-cn-hangzhou.aliyuncs.com', bucket)
+async def async_go():
+    """
+    example coroutine
+    """
+    obj_name = "your_obj"
+    folder = "readme"
+    data_obj = f"{folder}/{obj_name}"
 
-    # upload object to oss
-    data = b'\x01'*1024
-    resp = await bucket.put_object(data, data_obj)
-    print(resp)
+    auth = Auth(OSS_ACCESS_KEY_ID, OSS_SECRET_ACCESS_KEY)
+    async with AioBucket(
+        auth, "http://oss-cn-hangzhou.aliyuncs.com", BUCKET_NAME
+    ) as bucket:
 
-    # upload object to oss
-    obj_read = await bucket.get_obj(data, data_obj)
-    assert obj_read == data
+        # upload object to oss
+        data = b"\x01" * 1024
+        resp = await bucket.put_object(data_obj, data)
 
-    # list oss objects
-    async for b in ObjectIterator(bucket):
-        print(b.key)
+        # upload object to oss
+        resp = await bucket.get_object(data_obj)
+        obj_read = await resp.read()
+        assert obj_read == data
 
-    # delete object 
-    resp = await bucket.delete_object(file_obj)
-    print(resp)
-    async for b in ObjectIterator(bucket):
-        print(b.key)
+        # list oss objects
+        print(f"objects in {folder}")
+        async for obj in AioObjectIterator(
+            bucket, prefix=folder
+        ):  # pylint: disable=not-an-iterable
+            print(obj.key)
 
-loop = asyncio.get_event_loop()
-loop.run_until_complete(go())
+        # delete object
+        resp = await bucket.delete_object(data_obj)
+        print(f"objects in {folder}, after delete")
+        async for obj in AioObjectIterator(
+            bucket, prefix=folder
+        ):  # pylint: disable=not-an-iterable
+            print(obj.key)
+
+
+asyncio.run(async_go())

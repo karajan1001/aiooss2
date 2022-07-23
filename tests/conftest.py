@@ -11,9 +11,9 @@ import uuid
 
 import pytest
 import requests
+from oss2 import Bucket
 
-import oss2
-from aiooss2 import Auth, Service, Bucket, StsAuth, AnonymousAuth
+from aiooss2 import AioBucket, Auth
 
 PORT = 5555
 LICENSE_PATH = os.path.join(
@@ -84,38 +84,35 @@ def auth(access_key_id, access_key_secret):
 
 
 @pytest.fixture()
-def bucket(auth, endpoint, bucket_name):
+def oss2_bucket(auth, endpoint, bucket_name):
     return Bucket(auth, endpoint, bucket_name)
 
 
-def put_object(auth, endpoint, bucket_name, filename, contents):
-    bucket = oss2.Bucket(auth, endpoint, bucket_name)
-    bucket.put_object(filename, contents)
-
-
-def put_file(auth, endpoint, bucket_name, key, filename):
-    bucket = oss2.Bucket(auth, endpoint, bucket_name)
-    bucket.put_object_from_file(key, filename)
+@pytest.fixture()
+def bucket(auth, endpoint, bucket_name):
+    return AioBucket(auth, endpoint, bucket_name)
 
 
 @pytest.fixture(scope="session")
-def file_in_anonymous(endpoint, test_directory):
-    bucket = "dvc-anonymous"
-    file = f"{test_directory}/file"
-    put_object(endpoint, bucket, file, "foobar")
-    return f"/{bucket}/{file}"
+def file_in_anonymous(auth, endpoint, test_directory):
+    anonymous_bucket = "dvc-anonymous"
+    filename = f"{test_directory}/file"
+    bucket = Bucket(auth, endpoint, anonymous_bucket)
+    bucket.put_object(filename, "foobar")
+    return f"/{bucket}/{filename}"
 
 
 @pytest.fixture(scope="session")
-def number_file(test_bucket_name, endpoint, test_directory):
+def number_file(auth, test_bucket_name, endpoint, test_directory):
     filename = f"{test_directory}/number"
-    put_object(endpoint, test_bucket_name, filename, NUMBERS)
+    bucket = Bucket(auth, endpoint, test_bucket_name)
+    bucket.put_object(filename, NUMBERS)
     return f"/{test_bucket_name}/{filename}"
 
 
 @pytest.fixture(scope="session")
-def license_file(test_bucket_name, endpoint, test_directory):
+def license_file(auth, test_bucket_name, endpoint, test_directory):
     filename = f"{test_directory}/LICENSE"
-    put_file(endpoint, test_bucket_name, filename, LICENSE_PATH)
+    bucket = Bucket(auth, endpoint, test_bucket_name)
+    bucket.put_object_from_file(filename, LICENSE_PATH)
     return f"/{test_bucket_name}/{filename}"
-

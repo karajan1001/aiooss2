@@ -1,4 +1,9 @@
-__version__ = '0.0.1'
+"""
+Imports from this file follows the contents in `oss2``
+"""
 
-from oss2 import Auth, AnonymousAuth, StsAuth
-from .api import Bucket, Service
+# flake8: noqa
+from oss2 import AnonymousAuth, Auth, StsAuth
+
+from .api import AioBucket, AioService
+from .iterators import AioObjectIterator

@@ -2,24 +2,29 @@
 Modules Distributions.
 """
 import os
-from setuptools import setup, find_packages
+
+from setuptools import find_packages, setup
+
+install_requires = ["oss2>=2.14.0"]
 
 
-install_requires = ['oss2>=2.14.0']
+def _read(file):
+    return (
+        open(os.path.join(os.path.dirname(__file__), file), encoding="utf")
+        .read()
+        .strip()
+    )
 
-def read(f):
-    return open(os.path.join(os.path.dirname(__file__), f)).read().strip()
 
-with open("test_requirements.txt") as f_r:
+with open("test_requirements.txt", encoding="utf-8") as f_r:
     tests_requirements = [line.strip() for line in f_r.readlines()]
 
 setup(
-    name="ossfs",
-    version="2021.8.0",
+    name="aiooss2",
+    version="0.1.0",
     description="Async client for aliyun OSS",
-    long_description='\n\n'.join((read('README.rst'), read('CHANGES.txt'))),
     author="Yanxiang Gao",
-    author_email="gao@iterive.ai",
+    author_email="mishanyo1001@gmail.com",
     download_url="https://github.com/karajan1001/aiooss2",
     license="Apache-2.0 License",
     install_requires=["aiohttp>=3.7.4", "oss2>=2.14.0"],

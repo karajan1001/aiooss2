@@ -2,9 +2,9 @@
 
 Async client for aliyun OSS(Object Storage Service) using oss2 and aiohttp_/asyncio_.
 
-The main purpose of this library is to support aliyun OSS api, but other services
+The main purpose of this library is to support aliyun OSS async api, but other services
 should work (but maybe with minor fixes). For now, we have tested
-only upload/download api for OSS. More functionality will be coming soon.
+only upload/download/delete/list api for OSS. More functionality will be coming soon.
 
 # Install
 
@@ -17,85 +17,52 @@ pip install aiooss2
 
 ```python
 import asyncio
-from aiooss2 import Auth, Bucket, ObjectIterator
+import os
 
-OSS_ACCESS_KEY_ID = "xxx"
-OSS_SECRET_ACCESS_KEY = "xxx"
+from aiooss2 import AioBucket, AioObjectIterator, Auth
 
-
-async def go():
-    bucket = 'aiooss2-test'
-    filename = 'your_file'
-    folder = 'readme'
-    file_obj = f'{folder}/{filename}'
-    data_obj = f'{folder}/{data}'
+OSS_ACCESS_KEY_ID = os.environ.get('OSS_ACCESS_KEY_ID')
+OSS_SECRET_ACCESS_KEY = os.environ.get('OSS_SECRET_ACCESS_KEY')
+BUCKET_NAME = os.environ.get("OSS_TEST_BUCKET_NAME")
 
 
-    auth = Auth(OSS_ACCESS_KEY_ID , OSS_SECRET_ACCESS_KEY)
-    bucket = Bucket(auth, 'http://oss-cn-hangzhou.aliyuncs.com', bucket)
+async def async_go():
+    """
+    example coroutine
+    """
+    obj_name = "your_obj"
+    folder = "readme"
+    data_obj = f"{folder}/{obj_name}"
 
-    # upload object to oss
-    data = b'\x01'*1024
-    resp = await bucket.put_object(data, data_obj)
-    print(resp)
+    auth = Auth(OSS_ACCESS_KEY_ID, OSS_SECRET_ACCESS_KEY)
+    async with AioBucket(auth, "http://oss-cn-hangzhou.aliyuncs.com", BUCKET_NAME) as bucket:
 
-    # upload object to oss
-    obj_read = await bucket.get_obj(data, data_obj)
-    assert obj_read == data
+        # upload object to oss
+        data = b"\x01" * 1024
+        resp = await bucket.put_object(data_obj, data)
 
-    # list oss objects
-    async for b in ObjectIterator(bucket):
-        print(b.key)
+        # upload object to oss
+        resp = await bucket.get_object(data_obj)
+        obj_read = await resp.read()
+        assert obj_read == data
 
-    # delete object 
-    resp = await bucket.delete_object(file_obj)
-    print(resp)
-    async for b in ObjectIterator(bucket):
-        print(b.key)
+        # list oss objects
+        print(f"objects in {folder}")
+        async for obj in AioObjectIterator(
+            bucket, prefix=folder
+        ):  # pylint: disable=not-an-iterable
+            print(obj.key)
 
-loop = asyncio.get_event_loop()
-loop.run_until_complete(go())
-```
+        # delete object
+        resp = await bucket.delete_object(data_obj)
+        print(f"objects in {folder}, after delete")
+        async for obj in AioObjectIterator(
+            bucket, prefix=folder
+        ):  # pylint: disable=not-an-iterable
+            print(obj.key)
 
-## Run Tests
-------------
 
-Make sure you have development requirements installed and your oss key and secret accessible via environment variables:
-
-```bash
-$pip3 install -e "."
-$export OSS_ACCESS_KEY_ID=xxx
-$export OSS_SECRET_ACCESS_KEY=xxx
-```
-
-Execute tests suite:
-
-```bash
-
-    # upload file to oss
-    resp = await bucket.put_object_from_file(file_obj, filename)
-    print(resp)
-
-    # get object to file
-    obj_read = await bucket.get_object_to_file(file_obj, newfile)
-    # this will ensure the connection is correctly re-used/closed
-    with open('your_file') as f:
-        assert await obj_read == data
-
-    # list oss objects
-    async for b in aiooss2.ObjectIterator(bucket):
-        print(b.key)
-
-    # delete object 
-    resp = await bucket.delete_object()
-    print(resp)
-
-    # list s3 objects using paginator
-    async for b in aiooss2.ObjectIterator(bucket):
-        print(b.key)
-
-loop = asyncio.get_event_loop()
-loop.run_until_complete(go())
+asyncio.run(async_go())
 ```
 
 ## Run Tests
