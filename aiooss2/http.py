@@ -26,7 +26,7 @@ class AioResponse(Response):
     """
 
     def __init__(self, response: "ClientResponse"):
-        response.status_code = response.status
+        response.status_code = response.status  # type: ignore[attr-defined]
         super().__init__(response)
         self.__all_read = False
 
@@ -62,7 +62,7 @@ class AioSession:
         """
 
         self.psize = psize or defaults.connection_pool_size
-        self.session: Optional[AioSession] = None
+        self.session: Optional[ClientSession] = None
 
     async def do_request(
         self, req: "Request", timeout: Optional[int] = None
@@ -91,6 +91,7 @@ class AioSession:
         )
 
         try:
+            assert self.session
             resp = await self.session.request(
                 req.method,
                 req.url,
