@@ -1,5 +1,5 @@
 """
-Module for exceptions classes used in aiooss
+Module for exceptions classes used in aiooss2
 """
 
 from oss2.exceptions import (
