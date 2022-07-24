@@ -13,7 +13,7 @@ import pytest
 import requests
 from oss2 import Bucket
 
-from aiooss2 import AioBucket, Auth
+from aiooss import AioBucket, Auth
 
 PORT = 5555
 LICENSE_PATH = os.path.join(

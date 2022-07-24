@@ -24,7 +24,7 @@ repos:
     - id: mypy
       name: mypy
       entry: mypy
-      files: ^aiooss2/
+      files: ^aiooss/
       language: system
       types: [python]
     - id: pylint

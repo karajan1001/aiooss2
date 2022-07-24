@@ -35,10 +35,10 @@ class AioBucket(Bucket):
     use case (bucket in HangZhou area)::
 
     >>> import oss2
-    >>> import aiooss2
+    >>> import aiooss
     >>> import asyncio
     >>> auth = oss2.Auth('your-access-key-id', 'your-access-key-secret')
-    >>> bucket = aiooss2.Bucket(auth, 'http://oss-cn-hangzhou.aliyuncs.com',
+    >>> bucket = aiooss.Bucket(auth, 'http://oss-cn-hangzhou.aliyuncs.com',
     >>>                         'your-bucket')
     >>> def upload():
     >>>     data = b"\x01" * 1024

@@ -1,10 +1,10 @@
 """
-A simple async example to use aiooss2
+A simple async example to use aiooss
 """
 import asyncio
 import os
 
-from aiooss2 import AioBucket, AioObjectIterator, Auth
+from aiooss import AioBucket, AioObjectIterator, Auth
 
 OSS_ACCESS_KEY_ID = os.environ.get("OSS_ACCESS_KEY_ID")
 OSS_SECRET_ACCESS_KEY = os.environ.get("OSS_SECRET_ACCESS_KEY")
