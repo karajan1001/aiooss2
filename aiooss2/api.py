@@ -104,6 +104,7 @@ class AioBucket(Bucket):
         if req.headers.get("Accept-Encoding") is None:
             req.headers.pop("Accept-Encoding")
 
+        assert self.session
         resp: AioResponse = await self.session.do_request(
             req, timeout=self.timeout
         )
