@@ -21,7 +21,7 @@ with open("test_requirements.txt", encoding="utf-8") as f_r:
 
 setup(
     name="aiooss2",
-    version="0.1.1",
+    version="0.1.2",
     description="Async client for aliyun OSS",
     author="Yanxiang Gao",
     author_email="mishanyo1001@gmail.com",
