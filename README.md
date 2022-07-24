@@ -1,4 +1,4 @@
-# aiooss2
+# aiooss
 
 Async client for aliyun OSS(Object Storage Service) using oss2 and aiohttp_/asyncio_.
 
@@ -9,7 +9,7 @@ only upload/download/delete/list api for OSS. More functionality will be coming 
 # Install
 
 ```bash
-pip install aiooss2
+pip install aiooss
 ```
 
 ## Basic Example
@@ -19,7 +19,7 @@ pip install aiooss2
 import asyncio
 import os
 
-from aiooss2 import AioBucket, AioObjectIterator, Auth
+from aiooss import AioBucket, AioObjectIterator, Auth
 
 OSS_ACCESS_KEY_ID = os.environ.get('OSS_ACCESS_KEY_ID')
 OSS_SECRET_ACCESS_KEY = os.environ.get('OSS_SECRET_ACCESS_KEY')

@@ -20,12 +20,12 @@ with open("test_requirements.txt", encoding="utf-8") as f_r:
     tests_requirements = [line.strip() for line in f_r.readlines()]
 
 setup(
-    name="aiooss2",
+    name="aiooss",
     version="0.1.0",
     description="Async client for aliyun OSS",
     author="Yanxiang Gao",
     author_email="mishanyo1001@gmail.com",
-    download_url="https://github.com/karajan1001/aiooss2",
+    download_url="https://github.com/karajan1001/aiooss",
     license="Apache-2.0 License",
     install_requires=["aiohttp>=3.7.4", "oss2>=2.14.0"],
     extras_require={"tests": tests_requirements},

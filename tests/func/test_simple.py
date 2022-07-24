@@ -1,5 +1,5 @@
 """
-Basic tests for aiooss2
+Basic tests for aiooss
 """
 # pylint: disable=missing-function-docstring
 import asyncio
@@ -10,13 +10,13 @@ from typing import TYPE_CHECKING
 import pytest
 from oss2 import ObjectIterator
 
-from aiooss2 import AioObjectIterator
+from aiooss import AioObjectIterator
 
 if TYPE_CHECKING:
 
     from oss2 import Bucket
 
-    from aiooss2 import AioBucket
+    from aiooss import AioBucket
 
 
 @pytest.fixture(scope="module", name="test_path")
