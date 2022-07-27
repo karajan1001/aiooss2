@@ -10,12 +10,7 @@ from oss2 import Auth, Bucket, models, xml_utils
 from oss2.api import _make_range_string
 from oss2.compat import to_string
 from oss2.http import CaseInsensitiveDict, Request
-from oss2.models import (
-    GetObjectResult,
-    ListObjectsResult,
-    PutObjectResult,
-    RequestResult,
-)
+from oss2.models import ListObjectsResult, PutObjectResult, RequestResult
 from oss2.utils import (
     check_crc,
     make_crc_adapter,
@@ -25,6 +20,7 @@ from oss2.utils import (
 
 from .exceptions import make_exception
 from .http import AioResponse, AioSession
+from .models import AioGetObjectResult
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +78,7 @@ class AioBucket(Bucket):
         return self
 
     async def __aexit__(self, *args):
-        await self.session.__aenter__()
+        await self.session.__aexit__()
 
     async def __do_object(self, method, key, **kwargs) -> AioResponse:
         return await self._do(method, self.bucket_name, key, **kwargs)
@@ -182,7 +178,7 @@ class AioBucket(Bucket):
         progress_callback=None,
         process=None,
         params=None,
-    ):
+    ) -> AioGetObjectResult:
         """下载一个文件。
 
         用法 ::
@@ -238,7 +234,7 @@ class AioBucket(Bucket):
             resp.status,
         )
 
-        return GetObjectResult(resp, progress_callback, self.enable_crc)
+        return AioGetObjectResult(resp, progress_callback, self.enable_crc)
 
     async def delete_object(self, key, params=None, headers=None):
         """删除一个文件。

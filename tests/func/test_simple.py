@@ -47,8 +47,9 @@ def test_get_object(bucket: "AioBucket", oss2_bucket: "Bucket", test_path):
 
     async def get(object_name):
         async with bucket as aiobucket:
-            result = await aiobucket.get_object(object_name)
-            return await result.read()
+            resp = await aiobucket.get_object(object_name)
+            async with resp as result:
+                return await result.read()
 
     result = asyncio.run(get(object_name))
     assert result == data

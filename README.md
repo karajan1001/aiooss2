@@ -41,10 +41,10 @@ async def async_go():
         data = b"\x01" * 1024
         resp = await bucket.put_object(data_obj, data)
 
-        # upload object to oss
+        # download object to oss
         resp = await bucket.get_object(data_obj)
-        obj_read = await resp.read()
-        assert obj_read == data
+        async with resp as result:
+            assert await result.read() == data
 
         # list oss objects
         print(f"objects in {folder}")
