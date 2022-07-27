@@ -25,6 +25,8 @@ class AioResponse(Response):
     aiooss2 api
     """
 
+    response: "ClientResponse"
+
     def __init__(self, response: "ClientResponse"):
         response.status_code = response.status  # type: ignore[attr-defined]
         super().__init__(response)
@@ -39,7 +41,6 @@ class AioResponse(Response):
             raise NotImplementedError
 
         content = await self.response.read()
-        self.response.release()
         self.__all_read = True
         return content
 
@@ -48,7 +49,7 @@ class AioResponse(Response):
         return await self.response.content.readchunk(_CHUNK_SIZE)
 
     def release(self):
-        """relase the response"""
+        """release the response"""
         self.response.release()
 
 
@@ -63,6 +64,7 @@ class AioSession:
 
         self.psize = psize or defaults.connection_pool_size
         self.session: Optional[ClientSession] = None
+        self.conn: Optional[TCPConnector] = None
 
     async def do_request(
         self, req: "Request", timeout: Optional[int] = None
@@ -105,8 +107,10 @@ class AioSession:
             raise RequestError(err) from err
 
     async def __aenter__(self):
-        conn = TCPConnector(limit=self.psize, limit_per_host=self.psize)
-        self.session = ClientSession(connector=conn)
+        self.conn = TCPConnector(limit=self.psize, limit_per_host=self.psize)
+        self.session = ClientSession(connector=self.conn)
+        return self
 
-    async def __aexit__(self, exception_type, exception_value, traceback):
-        self.session.close()
+    async def __aexit__(self, *args):
+        await self.conn.close()
+        await self.session.close()
