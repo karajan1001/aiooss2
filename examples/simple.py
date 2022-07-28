@@ -29,9 +29,8 @@ async def async_go():
         resp = await bucket.put_object(data_obj, data)
 
         # download object to oss
-        resp = await bucket.get_object(data_obj)
-        async with resp as result:
-            assert await result.read() == data
+        async with await bucket.get_object(data_obj) as resp:
+            assert await resp.read() == data
 
         # list oss objects
         print(f"objects in {folder}")
