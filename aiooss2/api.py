@@ -78,7 +78,7 @@ class AioBucket(Bucket):
         return self
 
     async def __aexit__(self, *args):
-        await self.session.__aexit__()
+        await self.session.close()
 
     async def __do_object(self, method, key, **kwargs) -> AioResponse:
         return await self._do(method, self.bucket_name, key, **kwargs)
