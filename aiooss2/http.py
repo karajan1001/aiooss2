@@ -2,7 +2,6 @@
 aiooss2.http
 """
 # pylint: disable=invalid-overridden-method
-# pylint: disable=too-few-public-methods
 import logging
 from typing import TYPE_CHECKING, Optional
 
@@ -112,5 +111,9 @@ class AioSession:
         return self
 
     async def __aexit__(self, *args):
+        await self.close()
+
+    async def close(self):
+        """gracefully close the AioSession class"""
         await self.conn.close()
         await self.session.close()
