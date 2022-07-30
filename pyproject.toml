@@ -1,5 +1,7 @@
 [tool.black]
 line-length = 79
 
+[tool.setuptools_scm]
+
 [tool.pylint.message_control]
 disable=["ungrouped-imports"]
