@@ -11,9 +11,9 @@ import uuid
 
 import pytest
 import requests
-from oss2 import Bucket
+from oss2 import Bucket, Service
 
-from aiooss2 import AioBucket, Auth
+from aiooss2 import AioBucket, AioService, Auth
 
 PORT = 5555
 LICENSE_PATH = os.path.join(
@@ -91,6 +91,16 @@ def oss2_bucket(auth, endpoint, bucket_name):
 @pytest.fixture()
 def bucket(auth, endpoint, bucket_name):
     return AioBucket(auth, endpoint, bucket_name)
+
+
+@pytest.fixture()
+def oss2_service(auth, endpoint):
+    return Service(auth, endpoint)
+
+
+@pytest.fixture()
+def service(auth, endpoint):
+    return AioService(auth, endpoint)
 
 
 @pytest.fixture(scope="session")

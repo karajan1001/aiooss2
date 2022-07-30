@@ -2,14 +2,16 @@
 Contains some useful iteraotrs, can be used to iterate buckets、
 files or file parts etc.
 """
-
-from typing import Dict, Optional
+# pylint: disable=too-many-arguments
+from typing import TYPE_CHECKING, Dict, Optional
 
 from oss2 import defaults, http
 from oss2.models import ListObjectsResult, SimplifiedObjectInfo
 
-from .api import AioBucket
 from .exceptions import ServerError
+
+if TYPE_CHECKING:
+    from .api import AioBucket, AioService
 
 
 class _AioBaseIterator:
@@ -17,7 +19,7 @@ class _AioBaseIterator:
         self.is_truncated = True
         self.next_marker = marker
 
-        max_retries = defaults.get(max_retries, defaults.request_retries)
+        max_retries = max_retries or defaults.request_retries
         self.max_retries = max_retries if max_retries > 0 else 1
 
         self.entries = []
@@ -64,9 +66,9 @@ class AioObjectIterator(_AioBaseIterator):
     returned is a directory.
     """
 
-    def __init__(  # pylint: disable=too-many-arguments
+    def __init__(
         self,
-        bucket: AioBucket,
+        bucket: "AioBucket",
         prefix: str = "",
         delimiter: str = "",
         marker: str = "",
@@ -108,4 +110,41 @@ class AioObjectIterator(_AioBaseIterator):
             for prefix in result.prefix_list
         ]
         self.entries.sort(key=lambda obj: obj.key)
+        return result.is_truncated, result.next_marker
+
+
+class AioBucketIterator(_AioBaseIterator):
+    """Iterate over buckets of an user
+    Return `SimplifiedBucketInfo <oss2.models.SimplifiedBucketInfo>` every
+        iteration
+    """
+
+    def __init__(
+        self,
+        service: "AioService",
+        prefix: str = "",
+        marker: str = "",
+        max_keys: int = 100,
+        max_retries: Optional[int] = None,
+    ):
+        """
+
+        Args:
+            service (AioService): Service class of a special user.
+            prefix (str, optional): prefix to filter the buckets results.
+            marker (str, optional): paginate separator.
+            max_keys (int, optional): max return number per page.
+            max_retries (Optional[int], optional): max retry count.
+        """
+        super().__init__(marker, max_retries)
+        self.service = service
+        self.prefix = prefix
+        self.max_keys = max_keys
+
+    async def _fetch(self):
+        result = await self.service.list_buckets(
+            prefix=self.prefix, marker=self.next_marker, max_keys=self.max_keys
+        )
+        self.entries = result.buckets
+
         return result.is_truncated, result.next_marker
