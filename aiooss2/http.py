@@ -117,3 +117,13 @@ class AioSession:
         """gracefully close the AioSession class"""
         await self.conn.close()
         await self.session.close()
+
+    @property
+    def closed(self):
+        """Is client session closed.
+
+        A readonly property.
+        """
+        if self.session is None:
+            return True
+        return self.session.closed

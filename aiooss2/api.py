@@ -1,7 +1,8 @@
 """
 Module for Bucket and Service
 """
-# pylint: disable=invalid-overridden-method
+# pylint: disable=too-many-arguments
+# pylint: disable=too-many-instance-attributes
 
 import logging
 from typing import (
@@ -14,13 +15,16 @@ from typing import (
     Union,
 )
 
-from oss2 import Bucket, models, xml_utils
-from oss2.api import _make_range_string
+from oss2 import Bucket, defaults, models, xml_utils
+from oss2.api import _make_range_string, _normalize_endpoint, _UrlMaker
 from oss2.compat import to_string
+from oss2.exceptions import ClientError
 from oss2.http import CaseInsensitiveDict, Request
 from oss2.models import ListObjectsResult, PutObjectResult, RequestResult
 from oss2.utils import (
     check_crc,
+    is_valid_bucket_name,
+    is_valid_endpoint,
     make_crc_adapter,
     make_progress_adapter,
     set_content_type,
@@ -38,7 +42,138 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class AioBucket(Bucket):
+class _Base:  # pylint: disable=too-few-public-methods
+    def __init__(
+        self,
+        auth: Union["Auth", "AnonymousAuth", "StsAuth"],
+        endpoint: str,
+        is_cname: bool,
+        session: Optional[AioSession] = None,
+        connect_timeout: Optional[int] = None,
+        app_name: str = "",
+        enable_crc: bool = True,
+        proxies=None,
+    ):
+        """_summary_
+
+        Args:
+            auth (Union[Auth, AnonymousAuth, StsAuth]): Auth class.
+            endpoint (str): enpoint address or CNAME.
+            is_cname (bool): Whether the endpoint is a CNAME.
+            session (Optional[AioSession], optional): reuse a custom session.
+            connect_timeout (int): connection.
+            app_name (str, optional): app name.
+            enable_crc (bool, optional): enable crc check or not.
+            proxies (_type_, optional): proxies settings.
+
+        Raises:
+            ClientError: _description_
+        """
+        self.auth = auth
+        self.endpoint = _normalize_endpoint(endpoint.strip())
+        if is_valid_endpoint(self.endpoint) is not True:
+            raise ClientError(
+                "The endpoint you has specified is not valid, "
+                f"endpoint: {endpoint}"
+            )
+        self.session = session
+        self.timeout = connect_timeout or defaults.connect_timeout
+        self.app_name = app_name
+        self.enable_crc = False
+        self.proxies = proxies
+
+        self._make_url = _UrlMaker(self.endpoint, is_cname)
+        logger.debug(
+            "Init endpoint: %s, isCname: %s, connect_timeout: %s, "
+            "app_name: %s, enabled_crc: %s, proxies: %s",
+            endpoint,
+            is_cname,
+            connect_timeout,
+            app_name,
+            enable_crc,
+            proxies,
+        )
+
+    async def _do(
+        self, method: str, bucket_name: str, key: Union[bytes, str], **kwargs
+    ) -> "AioResponse":
+
+        key = to_string(key)
+        req = Request(
+            method,
+            self._make_url(bucket_name, key),
+            app_name=self.app_name,
+            **kwargs,
+        )
+        req.headers["Content-Type"] = "application/octet-stream"
+        self.auth._sign_request(  # pylint: disable=protected-access
+            req, bucket_name, key
+        )
+
+        if req.headers.get("Accept-Encoding") is None:
+            req.headers.pop("Accept-Encoding")
+
+        assert self.session
+        resp: "AioResponse" = await self.session.do_request(
+            req, timeout=self.timeout
+        )
+        if resp.status // 100 != 2:
+            err = await make_exception(resp)
+            logger.info("Exception: %s", err)
+            raise err
+
+        content_length = models._hget(  # pylint: disable=protected-access
+            resp.headers, "content-length", int
+        )
+        if content_length is not None and content_length == 0:
+            await resp.read()
+
+        return resp
+
+    async def _do_url(self, method, sign_url, **kwargs):
+        req = Request(
+            method,
+            sign_url,
+            app_name=self.app_name,
+            proxies=self.proxies,
+            **kwargs,
+        )
+        resp: "AioResponse" = await self.session.do_request(
+            req, timeout=self.timeout
+        )
+        if resp.status // 100 != 2:
+            err = await make_exception(resp)
+            logger.info("Exception: %s", err)
+            raise err
+
+        content_length = models._hget(  # pylint: disable=protected-access
+            resp.headers, "content-length", int
+        )
+        if content_length is not None and content_length == 0:
+            await resp.read()
+
+        return resp
+
+    @staticmethod
+    async def _parse_result(
+        resp: "AioResponse", parse_func: Callable, klass: Type
+    ):
+        result = klass(resp)
+        parse_func(result, await resp.read())
+        return result
+
+    async def __aenter__(self):
+        if self.session is None:
+            self.session = AioSession()
+        if self.session.closed:
+            await self.session.__aenter__()
+        return self
+
+    async def __aexit__(self, *args):
+        await self.session.close()
+
+
+class AioBucket(_Base):
     """Used for Bucket and Object opertions, creating、deleting Bucket,
     uploading、downloading Object, etc。
     use case (bucket in HangZhou area)::
@@ -66,71 +201,27 @@ class AioBucket(Bucket):
         auth: Union["Auth", "AnonymousAuth", "StsAuth"],
         endpoint: str,
         bucket_name: str,
-        session: Optional[AioSession] = None,
-        **kwargs
+        is_cname: bool = False,
+        **kwargs,
     ):
         """
         Args:
-            auth (Union[Auth, AnonymousAuth, StsAuth]): Auth class
-            endpoint (str): enpoint address or CNAME
             bucket_name (str): the bucket name to operate
-            session (Optional[AioSession], optional): reuse a custom session
         """
+        self.bucket_name = bucket_name.strip()
+        if is_valid_bucket_name(self.bucket_name) is not True:
+            raise ClientError("The bucket_name is invalid, please check it.")
         super().__init__(
-            auth, endpoint, bucket_name, session=session, **kwargs
+            auth,
+            endpoint,
+            is_cname,
+            **kwargs,
         )
-        self.session: Optional[AioSession] = session
-        self.enable_crc: bool = False
-
-    async def __aenter__(self) -> "AioBucket":
-        if self.session is None:
-            self.session = AioSession()
-            await self.session.__aenter__()
-        return self
-
-    async def __aexit__(self, *args):
-        await self.session.close()
 
     async def __do_object(
         self, method: str, key: Union[bytes, str], **kwargs
     ) -> "AioResponse":
         return await self._do(method, self.bucket_name, key, **kwargs)
-
-    async def _do(
-        self, method: str, bucket_name: str, key: Union[bytes, str], **kwargs
-    ) -> "AioResponse":
-
-        key = to_string(key)
-        req = Request(
-            method,
-            self._make_url(bucket_name, key),
-            app_name=self.app_name,
-            **kwargs
-        )
-        req.headers["Content-Type"] = "application/octet-stream"
-        self.auth._sign_request(  # pylint: disable=protected-access
-            req, bucket_name, key
-        )
-
-        if req.headers.get("Accept-Encoding") is None:
-            req.headers.pop("Accept-Encoding")
-
-        assert self.session
-        resp: "AioResponse" = await self.session.do_request(
-            req, timeout=self.timeout
-        )
-        if resp.status // 100 != 2:
-            err = await make_exception(resp)
-            logger.info("Exception: %s", err)
-            raise err
-
-        content_length = models._hget(  # pylint: disable=protected-access
-            resp.headers, "content-length", int
-        )
-        if content_length is not None and content_length == 0:
-            await resp.read()
-
-        return resp
 
     async def put_object(
         self,
@@ -278,14 +369,6 @@ class AioBucket(Bucket):
             resp.status,
         )
         return RequestResult(resp)
-
-    @staticmethod
-    async def _parse_result(
-        resp: "AioResponse", parse_func: Callable, klass: Type
-    ):
-        result = klass(resp)
-        parse_func(result, await resp.read())
-        return result
 
     async def list_objects(  # pylint: disable=too-many-arguments
         self,
