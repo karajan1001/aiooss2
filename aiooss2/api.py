@@ -15,12 +15,17 @@ from typing import (
     Union,
 )
 
-from oss2 import Bucket, defaults, models, xml_utils
+from oss2 import Bucket, defaults, models
 from oss2.api import _make_range_string, _normalize_endpoint, _UrlMaker
 from oss2.compat import to_string
 from oss2.exceptions import ClientError
 from oss2.http import CaseInsensitiveDict, Request
-from oss2.models import ListObjectsResult, PutObjectResult, RequestResult
+from oss2.models import (
+    ListBucketsResult,
+    ListObjectsResult,
+    PutObjectResult,
+    RequestResult,
+)
 from oss2.utils import (
     check_crc,
     is_valid_bucket_name,
@@ -29,6 +34,7 @@ from oss2.utils import (
     make_progress_adapter,
     set_content_type,
 )
+from oss2.xml_utils import parse_list_buckets, parse_list_objects
 
 from .exceptions import make_exception
 from .http import AioSession
@@ -42,7 +48,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class _Base:  # pylint: disable=too-few-public-methods
+class _AioBase:  # pylint: disable=too-few-public-methods
     def __init__(
         self,
         auth: Union["Auth", "AnonymousAuth", "StsAuth"],
@@ -173,7 +179,7 @@ class _Base:  # pylint: disable=too-few-public-methods
         await self.session.close()
 
 
-class AioBucket(_Base):
+class AioBucket(_AioBase):
     """Used for Bucket and Object opertions, creating、deleting Bucket,
     uploading、downloading Object, etc。
     use case (bucket in HangZhou area)::
@@ -418,10 +424,85 @@ class AioBucket(_Base):
             resp.status,
         )
         return await self._parse_result(
-            resp, xml_utils.parse_list_objects, ListObjectsResult
+            resp, parse_list_objects, ListObjectsResult
         )
 
 
 # pylint: disable=too-few-public-methods
-class AioService:
+class AioService(_AioBase):
     """Service class used for operations like list all bucket"""
+
+    def __init__(
+        self,
+        auth: Union["Auth", "AnonymousAuth", "StsAuth"],
+        endpoint: str,
+        session: Optional[AioSession] = None,
+        connect_timeout: Optional[int] = None,
+        app_name: str = "",
+        proxies=None,
+    ):
+        """_summary_
+
+        Args:
+            auth (Union[Auth, AnonymousAuth, StsAuth]): Auth class.
+            endpoint (str): enpoint address or CNAME.
+            session (Optional[AioSession], optional): reuse a custom session.
+            connect_timeout (int): connection.
+            app_name (str, optional): app name.
+            proxies (_type_, optional): proxies settings.
+        """
+        super().__init__(
+            auth,
+            endpoint,
+            False,
+            session,
+            connect_timeout,
+            app_name=app_name,
+            proxies=proxies,
+        )
+
+    async def list_buckets(
+        self,
+        prefix: str = "",
+        marker: str = "",
+        max_keys: int = 100,
+        params: Optional[Dict] = None,
+    ) -> ListBucketsResult:
+        """List buckets with given prefix of an user
+
+        Args:
+            prefix (str, optional): prefix to filter the buckets results.
+            marker (str, optional): paginate separator.
+            max_keys (int, optional): max return number per page.
+            params (Optional[Dict], optional): Some optional params.
+
+        Returns:
+            oss2.models.ListBucketsResult:
+        """
+        logger.debug(
+            "Start to list buckets, prefix: %s, marker: %s, max-keys: %d",
+            prefix,
+            marker,
+            max_keys,
+        )
+
+        list_param = {}
+        list_param["prefix"] = prefix
+        list_param["marker"] = marker
+        list_param["max-keys"] = str(max_keys)
+
+        if params is not None:
+            if "tag-key" in params:
+                list_param["tag-key"] = params["tag-key"]
+            if "tag-value" in params:
+                list_param["tag-value"] = params["tag-value"]
+
+        resp = await self._do("GET", "", "", params=list_param)
+        logger.debug(
+            "List buckets done, req_id: %s, status_code: %s",
+            resp.request_id,
+            resp.status,
+        )
+        return await self._parse_result(
+            resp, parse_list_buckets, ListBucketsResult
+        )
