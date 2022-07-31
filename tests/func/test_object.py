@@ -132,3 +132,22 @@ def test_get_bucket_info(bucket: "AioBucket", oss2_bucket: "Bucket"):
     assert result.owner.display_name == expected.owner.display_name
     assert result.owner.id == expected.owner.id
     assert result.acl.grant == expected.acl.grant
+
+
+def test_append_object(bucket: "AioBucket", oss2_bucket: "Bucket", test_path):
+    data = b"1234567890"
+    append_data = b"abcdefg"
+    function_name = inspect.stack()[0][0].f_code.co_name
+    object_name = f"{test_path}/{function_name}"
+
+    async def append_object(object_name, position, data):
+        async with bucket as aiobucket:
+            return await aiobucket.append_object(object_name, position, data)
+
+    result = asyncio.run(append_object(object_name, 0, data))
+    assert result.resp.status == 200
+    assert oss2_bucket.get_object(object_name).read() == data
+
+    result = asyncio.run(append_object(object_name, len(data), append_data))
+    assert result.resp.status == 200
+    assert oss2_bucket.get_object(object_name).read() == data + append_data

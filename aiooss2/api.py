@@ -21,6 +21,7 @@ from oss2.compat import to_string
 from oss2.exceptions import ClientError, NoSuchKey
 from oss2.http import CaseInsensitiveDict, Request
 from oss2.models import (
+    AppendObjectResult,
     GetBucketInfoResult,
     GetObjectMetaResult,
     ListBucketsResult,
@@ -468,6 +469,52 @@ class AioBucket(_AioBase):
         return await self._parse_result(
             resp, parse_get_bucket_info, GetBucketInfoResult
         )
+
+    async def append_object(
+        self,
+        key: str,
+        position: int,
+        data,
+        headers: Optional[Dict] = None,
+        progress_callback: Optional[Callable] = None,
+        init_crc: Optional[int] = None,
+    ) -> AppendObjectResult:
+        """Append value to an object
+
+        Args:
+            key (str): key of the object
+            position (int): position to append
+            data (_type_): data to append
+            headers (Optional[Dict], optional): HTTP headers to specify.
+            progress_callback (Optional[Callable], optional): callback function
+                for progress bar.
+            init_crc (Optional[int], optional): init value of the crc
+
+        Returns:
+            AppendObjectResult:
+        """
+        headers = set_content_type(CaseInsensitiveDict(headers), key)
+
+        if progress_callback:
+            data = make_progress_adapter(data, progress_callback)
+
+        if self.enable_crc and init_crc is not None:
+            data = make_crc_adapter(data, init_crc)
+
+        resp = await self.__do_object(
+            "POST",
+            key,
+            data=data,
+            headers=headers,
+            params={"append": "", "position": str(position)},
+        )
+        logger.debug("Append object done")
+        result = AppendObjectResult(resp)
+
+        if self.enable_crc and result.crc is not None and init_crc is not None:
+            check_crc("append object", data.crc, result.crc, result.request_id)
+
+        return result
 
 
 # pylint: disable=too-few-public-methods
