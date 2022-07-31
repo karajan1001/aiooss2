@@ -109,20 +109,20 @@ def file_in_anonymous(auth, endpoint, test_directory):
     filename = f"{test_directory}/file"
     bucket = Bucket(auth, endpoint, anonymous_bucket)
     bucket.put_object(filename, "foobar")
-    return f"/{bucket}/{filename}"
+    return filename
 
 
 @pytest.fixture(scope="session")
-def number_file(auth, test_bucket_name, endpoint, test_directory):
+def number_file(auth, bucket_name, endpoint, test_directory):
     filename = f"{test_directory}/number"
-    bucket = Bucket(auth, endpoint, test_bucket_name)
+    bucket = Bucket(auth, endpoint, bucket_name)
     bucket.put_object(filename, NUMBERS)
-    return f"/{test_bucket_name}/{filename}"
+    return filename
 
 
 @pytest.fixture(scope="session")
-def license_file(auth, test_bucket_name, endpoint, test_directory):
+def license_file(auth, bucket_name, endpoint, test_directory):
     filename = f"{test_directory}/LICENSE"
-    bucket = Bucket(auth, endpoint, test_bucket_name)
+    bucket = Bucket(auth, endpoint, bucket_name)
     bucket.put_object_from_file(filename, LICENSE_PATH)
-    return f"/{test_bucket_name}/{filename}"
+    return filename

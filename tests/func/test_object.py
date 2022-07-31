@@ -97,3 +97,17 @@ def test_delete_object(bucket: "AioBucket", oss2_bucket: "Bucket", test_path):
         obj.key for obj in ObjectIterator(oss2_bucket, prefix=object_name)
     ]
     assert object_name not in file_list
+
+
+def test_get_object_meta(
+    bucket: "AioBucket", oss2_bucket: "Bucket", number_file
+):
+    async def get_object_meta():
+        async with bucket as aiobucket:
+            return await aiobucket.get_object_meta(number_file)
+
+    result = asyncio.run(get_object_meta())
+    expected = oss2_bucket.get_object_meta(number_file)
+    assert expected.content_length == result.content_length
+    assert expected.last_modified == result.last_modified
+    assert expected.etag == result.etag

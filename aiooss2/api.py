@@ -21,6 +21,7 @@ from oss2.compat import to_string
 from oss2.exceptions import ClientError
 from oss2.http import CaseInsensitiveDict, Request
 from oss2.models import (
+    GetObjectMetaResult,
     ListBucketsResult,
     ListObjectsResult,
     PutObjectResult,
@@ -426,6 +427,45 @@ class AioBucket(_AioBase):
         return await self._parse_result(
             resp, parse_list_objects, ListObjectsResult
         )
+
+    async def get_object_meta(
+        self,
+        key: str,
+        params: Optional[Union[dict, CaseInsensitiveDict]] = None,
+        headers: Optional[Dict] = None,
+    ) -> GetObjectMetaResult:
+        """get meta data from object
+
+        Args:
+            key (str): object key
+            params (Optional[Union[dict, CaseInsensitiveDict]], optional):
+            headers (Optional[Dict], optional): HTTP headers to specify.
+
+        Returns:
+            GetObjectMetaResult:
+        """
+        headers = CaseInsensitiveDict(headers)
+        logger.debug(
+            "Start to get object metadata, bucket: %s, key: %s",
+            self.bucket_name,
+            key,
+        )
+
+        if params is None:
+            params = {}
+
+        if Bucket.OBJECTMETA not in params:
+            params[Bucket.OBJECTMETA] = ""
+
+        resp = await self.__do_object(
+            "GET", key, params=params, headers=headers
+        )
+        logger.debug(
+            "Get object metadata done, req_id: %s, status_code: %d",
+            resp.request_id,
+            resp.status,
+        )
+        return GetObjectMetaResult(resp)
 
 
 # pylint: disable=too-few-public-methods
