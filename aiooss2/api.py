@@ -18,7 +18,7 @@ from typing import (
 from oss2 import Bucket, defaults, models
 from oss2.api import _make_range_string, _normalize_endpoint, _UrlMaker
 from oss2.compat import to_string
-from oss2.exceptions import ClientError
+from oss2.exceptions import ClientError, NoSuchKey
 from oss2.http import CaseInsensitiveDict, Request
 from oss2.models import (
     GetObjectMetaResult,
@@ -466,6 +466,33 @@ class AioBucket(_AioBase):
             resp.status,
         )
         return GetObjectMetaResult(resp)
+
+    async def object_exists(
+        self, key: str, headers: Optional[Dict] = None
+    ) -> bool:
+        """Return True if key exists, False otherwise. raise Exception
+        for other exceptions.
+
+        Args:
+            key (str): key of the object
+            headers (Optional[Union[Dict, CaseInsensitiveDict]], optional):
+            HTTP headers to specify.
+
+        Returns:
+            bool:
+        """
+
+        logger.debug(
+            "Start to check if object exists, bucket: %s, key: %s",
+            self.bucket_name,
+            key,
+        )
+        try:
+            await self.get_object_meta(key, headers=headers)
+        except NoSuchKey:
+            return False
+
+        return True
 
 
 # pylint: disable=too-few-public-methods
