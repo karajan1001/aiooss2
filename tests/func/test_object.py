@@ -107,3 +107,12 @@ def test_get_object_meta(
     assert expected.content_length == result.content_length
     assert expected.last_modified == result.last_modified
     assert expected.etag == result.etag
+
+
+def test_object_exists(bucket: "AioBucket", number_file):
+    async def object_exists(object_name):
+        async with bucket as aiobucket:
+            return await aiobucket.object_exists(object_name)
+
+    assert asyncio.run(object_exists(number_file))
+    assert not asyncio.run(object_exists("non-exist"))
