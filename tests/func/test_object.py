@@ -11,6 +11,7 @@ import pytest
 from oss2 import ObjectIterator
 
 from aiooss2 import AioObjectIterator
+from tests.conftest import NUMBERS
 
 if TYPE_CHECKING:
 
@@ -39,20 +40,15 @@ def test_put_object(bucket: "AioBucket", oss2_bucket: "Bucket", test_path):
     assert oss2_bucket.get_object(object_name).read() == data
 
 
-def test_get_object(bucket: "AioBucket", oss2_bucket: "Bucket", test_path):
-    data = b"\x01" * 1024
-    function_name = inspect.stack()[0][0].f_code.co_name
-    object_name = f"{test_path}/{function_name}"
-    oss2_bucket.put_object(object_name, data)
-
+def test_get_object(bucket: "AioBucket", number_file):
     async def get(object_name):
         async with bucket as aiobucket:
             resp = await aiobucket.get_object(object_name)
             async with resp as result:
                 return await result.read()
 
-    result = asyncio.run(get(object_name))
-    assert result == data
+    result = asyncio.run(get(number_file))
+    assert result == NUMBERS
 
 
 def test_list_objects(bucket: "AioBucket", oss2_bucket: "Bucket", test_path):
@@ -102,11 +98,11 @@ def test_delete_object(bucket: "AioBucket", oss2_bucket: "Bucket", test_path):
 def test_get_object_meta(
     bucket: "AioBucket", oss2_bucket: "Bucket", number_file
 ):
-    async def get_object_meta():
+    async def get_object_meta(object_name):
         async with bucket as aiobucket:
-            return await aiobucket.get_object_meta(number_file)
+            return await aiobucket.get_object_meta(object_name)
 
-    result = asyncio.run(get_object_meta())
+    result = asyncio.run(get_object_meta(number_file))
     expected = oss2_bucket.get_object_meta(number_file)
     assert expected.content_length == result.content_length
     assert expected.last_modified == result.last_modified
