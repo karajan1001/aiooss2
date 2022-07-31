@@ -116,3 +116,19 @@ def test_object_exists(bucket: "AioBucket", number_file):
 
     assert asyncio.run(object_exists(number_file))
     assert not asyncio.run(object_exists("non-exist"))
+
+
+def test_get_bucket_info(bucket: "AioBucket", oss2_bucket: "Bucket"):
+    async def get_bucket_info():
+        async with bucket as aiobucket:
+            return await aiobucket.get_bucket_info()
+
+    result = asyncio.run(get_bucket_info())
+    expected = oss2_bucket.get_bucket_info()
+    assert result.name == expected.name
+    assert result.location == expected.location
+    assert result.creation_date == expected.creation_date
+    assert result.comment == expected.comment
+    assert result.owner.display_name == expected.owner.display_name
+    assert result.owner.id == expected.owner.id
+    assert result.acl.grant == expected.acl.grant
