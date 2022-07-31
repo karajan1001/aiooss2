@@ -21,6 +21,7 @@ from oss2.compat import to_string
 from oss2.exceptions import ClientError, NoSuchKey
 from oss2.http import CaseInsensitiveDict, Request
 from oss2.models import (
+    GetBucketInfoResult,
     GetObjectMetaResult,
     ListBucketsResult,
     ListObjectsResult,
@@ -35,7 +36,11 @@ from oss2.utils import (
     make_progress_adapter,
     set_content_type,
 )
-from oss2.xml_utils import parse_list_buckets, parse_list_objects
+from oss2.xml_utils import (
+    parse_get_bucket_info,
+    parse_list_buckets,
+    parse_list_objects,
+)
 
 from .exceptions import make_exception
 from .http import AioSession
@@ -229,6 +234,9 @@ class AioBucket(_AioBase):
         self, method: str, key: Union[bytes, str], **kwargs
     ) -> "AioResponse":
         return await self._do(method, self.bucket_name, key, **kwargs)
+
+    async def __do_bucket(self, method: str, **kwargs) -> "AioResponse":
+        return await self._do(method, self.bucket_name, "", **kwargs)
 
     async def put_object(
         self,
@@ -493,6 +501,23 @@ class AioBucket(_AioBase):
             return False
 
         return True
+
+    async def get_bucket_info(self) -> GetBucketInfoResult:
+        """Get bucket infomation, `Create time`, `Endpoint`, `Owner`, `ACL`
+
+        Returns:
+            GetBucketInfoResult
+        """
+        logger.debug("Start to get bucket info, bucket: %s", self.bucket_name)
+        resp = await self.__do_bucket("GET", params={Bucket.BUCKET_INFO: ""})
+        logger.debug(
+            "Get bucket info done, req_id: %s, status_code: %d",
+            resp.request_id,
+            resp.status,
+        )
+        return await self._parse_result(
+            resp, parse_get_bucket_info, GetBucketInfoResult
+        )
 
 
 # pylint: disable=too-few-public-methods
