@@ -126,9 +126,23 @@ class _AioBase:  # pylint: disable=too-few-public-methods
             req.headers.pop("Accept-Encoding")
 
         assert self.session
+        logger.debug(
+            "Start to %s, bucket: %s, key: %s, params: %s",
+            method,
+            bucket_name,
+            to_string(key),
+            kwargs,
+        )
         resp: "AioResponse" = await self.session.do_request(
             req, timeout=self.timeout
         )
+
+        logger.debug(
+            "Responsed from the server, req_id: %s, status_code: %d",
+            resp.request_id,
+            resp.status,
+        )
+
         if resp.status // 100 != 2:
             err = await make_exception(resp)
             logger.info("Exception: %s", err)
@@ -270,20 +284,10 @@ class AioBucket(_AioBase):
         if self.enable_crc:
             data = make_crc_adapter(data)
 
-        logger.debug(
-            "Start to put object, bucket: %s, key: %s, headers: %s",
-            self.bucket_name,
-            to_string(key),
-            headers,
-        )
         resp: "AioResponse" = await self.__do_object(
             "PUT", key, data=data, headers=headers
         )
-        logger.debug(
-            "Put object done, req_id: %s, status_code: %d",
-            resp.request_id,
-            resp.status,
-        )
+        logger.debug("Put object done")
         result = PutObjectResult(resp)
 
         if self.enable_crc and result.crc is not None:
@@ -333,23 +337,10 @@ class AioBucket(_AioBase):
         if process:
             params.update({Bucket.PROCESS: process})
 
-        logger.debug(
-            "Start to get object, bucket: %s， key: %s,"
-            " range: %s, headers: %s, params: %s",
-            self.bucket_name,
-            to_string(key),
-            range_string,
-            headers_dict,
-            params,
-        )
         resp = await self.__do_object(
             "GET", key, headers=headers_dict, params=params
         )
-        logger.debug(
-            "Get object done, req_id: %s, status_code: %d",
-            resp.request_id,
-            resp.status,
-        )
+        logger.debug("Get object done")
 
         return AioGetObjectResult(resp, progress_callback, self.enable_crc)
 
@@ -370,19 +361,10 @@ class AioBucket(_AioBase):
             RequestResult:
         """
 
-        logger.info(
-            "Start to delete object, bucket: %s, key: %s",
-            self.bucket_name,
-            to_string(key),
-        )
         resp = await self.__do_object(
             "DELETE", key, params=params, headers=headers
         )
-        logger.debug(
-            "Delete object done, req_id: %s, status_code: %d",
-            resp.request_id,
-            resp.status,
-        )
+        logger.debug("Delete object done")
         return RequestResult(resp)
 
     async def list_objects(  # pylint: disable=too-many-arguments
@@ -406,15 +388,6 @@ class AioBucket(_AioBase):
             ListObjectsResult:
         """
         headers = CaseInsensitiveDict(headers)
-        logger.debug(
-            "Start to List objects, bucket: %s, prefix: %s, delimiter: %s, "
-            "marker: %s, max-keys: %d",
-            self.bucket_name,
-            to_string(prefix),
-            delimiter,
-            to_string(marker),
-            max_keys,
-        )
         resp = await self.__do_object(
             "GET",
             "",
@@ -427,11 +400,7 @@ class AioBucket(_AioBase):
             },
             headers=headers,
         )
-        logger.debug(
-            "List objects done, req_id: %s, status_code: %d",
-            resp.request_id,
-            resp.status,
-        )
+        logger.debug("List objects done")
         return await self._parse_result(
             resp, parse_list_objects, ListObjectsResult
         )
@@ -453,11 +422,6 @@ class AioBucket(_AioBase):
             GetObjectMetaResult:
         """
         headers = CaseInsensitiveDict(headers)
-        logger.debug(
-            "Start to get object metadata, bucket: %s, key: %s",
-            self.bucket_name,
-            key,
-        )
 
         if params is None:
             params = {}
@@ -468,11 +432,7 @@ class AioBucket(_AioBase):
         resp = await self.__do_object(
             "GET", key, params=params, headers=headers
         )
-        logger.debug(
-            "Get object metadata done, req_id: %s, status_code: %d",
-            resp.request_id,
-            resp.status,
-        )
+        logger.debug("Get object metadata done")
         return GetObjectMetaResult(resp)
 
     async def object_exists(
@@ -490,11 +450,6 @@ class AioBucket(_AioBase):
             bool:
         """
 
-        logger.debug(
-            "Start to check if object exists, bucket: %s, key: %s",
-            self.bucket_name,
-            key,
-        )
         try:
             await self.get_object_meta(key, headers=headers)
         except NoSuchKey:
@@ -508,13 +463,8 @@ class AioBucket(_AioBase):
         Returns:
             GetBucketInfoResult
         """
-        logger.debug("Start to get bucket info, bucket: %s", self.bucket_name)
         resp = await self.__do_bucket("GET", params={Bucket.BUCKET_INFO: ""})
-        logger.debug(
-            "Get bucket info done, req_id: %s, status_code: %d",
-            resp.request_id,
-            resp.status,
-        )
+        logger.debug("Get bucket info done")
         return await self._parse_result(
             resp, parse_get_bucket_info, GetBucketInfoResult
         )
@@ -571,12 +521,6 @@ class AioService(_AioBase):
         Returns:
             oss2.models.ListBucketsResult:
         """
-        logger.debug(
-            "Start to list buckets, prefix: %s, marker: %s, max-keys: %d",
-            prefix,
-            marker,
-            max_keys,
-        )
 
         list_param = {}
         list_param["prefix"] = prefix
@@ -590,11 +534,7 @@ class AioService(_AioBase):
                 list_param["tag-value"] = params["tag-value"]
 
         resp = await self._do("GET", "", "", params=list_param)
-        logger.debug(
-            "List buckets done, req_id: %s, status_code: %s",
-            resp.request_id,
-            resp.status,
-        )
+        logger.debug("List buckets done")
         return await self._parse_result(
             resp, parse_list_buckets, ListBucketsResult
         )
