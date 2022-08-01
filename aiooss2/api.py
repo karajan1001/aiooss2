@@ -19,8 +19,9 @@ from typing import (
 
 from oss2 import Bucket, defaults, models
 from oss2.api import _make_range_string, _normalize_endpoint, _UrlMaker
-from oss2.compat import to_string, to_unicode
+from oss2.compat import to_string, to_unicode, urlquote
 from oss2.exceptions import ClientError, NoSuchKey
+from oss2.headers import OSS_COPY_OBJECT_SOURCE
 from oss2.http import CaseInsensitiveDict
 from oss2.models import (
     AppendObjectResult,
@@ -634,6 +635,48 @@ class AioBucket(_AioBase):
         return await self._parse_result(
             resp, parse_batch_delete_objects, BatchDeleteObjectsResult
         )
+
+    async def copy_object(
+        self,
+        source_bucket_name: str,
+        source_key: str,
+        target_key: str,
+        headers: Optional[Union[Dict, CaseInsensitiveDict]] = None,
+        params: Optional[Dict] = None,
+    ) -> PutObjectResult:
+        """copy object to another place
+
+        Args:
+            source_bucket_name (str): source object bucket
+            source_key (str): source object key
+            target_key (str): target object key
+            headers (Optional[Union[Dict, CaseInsensitiveDict]], optional):
+                HTTP headers to specify.
+            params (Optional[Dict], optional):
+
+        Returns:
+            PutObjectResult:
+        """
+
+        headers = CaseInsensitiveDict(headers)
+
+        if params and Bucket.VERSIONID in params:
+            headers[OSS_COPY_OBJECT_SOURCE] = (
+                "/"
+                + source_bucket_name
+                + "/"
+                + urlquote(source_key, "")
+                + "?versionId="
+                + params[Bucket.VERSIONID]
+            )
+        else:
+            headers[OSS_COPY_OBJECT_SOURCE] = (
+                "/" + source_bucket_name + "/" + urlquote(source_key, "")
+            )
+
+        resp = await self.__do_object("PUT", target_key, headers=headers)
+
+        return PutObjectResult(resp)
 
 
 # pylint: disable=too-few-public-methods

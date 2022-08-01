@@ -209,3 +209,24 @@ def test_batch_delete_objects(
         obj.key for obj in ObjectIterator(oss2_bucket, prefix=object_path)
     ] == expected
     assert result.deleted_keys == deleted
+
+
+def test_copy_objects(
+    bucket: "AioBucket",
+    oss2_bucket: "Bucket",
+    test_path,
+    number_file,
+    bucket_name,
+):
+    function_name = inspect.stack()[0][0].f_code.co_name
+    object_path = f"{test_path}/{function_name}"
+
+    async def copy_objects(file_from, file_to):
+        async with bucket as aiobucket:
+            return await aiobucket.copy_object(bucket_name, file_from, file_to)
+
+    asyncio.run(copy_objects(number_file, object_path))
+    assert [
+        obj.key for obj in ObjectIterator(oss2_bucket, prefix=object_path)
+    ] == [object_path]
+    assert oss2_bucket.get_object(object_path).read() == NUMBERS
