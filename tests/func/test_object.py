@@ -14,8 +14,8 @@ from aiooss2 import AioObjectIterator
 from tests.conftest import NUMBERS
 
 if TYPE_CHECKING:
-
     from oss2 import Bucket
+    from py.path import local
 
     from aiooss2 import AioBucket
 
@@ -151,3 +151,21 @@ def test_append_object(bucket: "AioBucket", oss2_bucket: "Bucket", test_path):
     result = asyncio.run(append_object(object_name, len(data), append_data))
     assert result.resp.status == 200
     assert oss2_bucket.get_object(object_name).read() == data + append_data
+
+
+def test_put_object_from_file(
+    tmpdir: "local", bucket: "AioBucket", oss2_bucket: "Bucket", test_path
+):
+    data = b"123456789" * 10
+    function_name = inspect.stack()[0][0].f_code.co_name
+    object_name = f"{test_path}/{function_name}"
+    file = tmpdir / "file"
+    file.write(data)
+
+    async def put_object_from_file(object_name, file):
+        async with bucket as aiobucket:
+            return await aiobucket.put_object_from_file(object_name, file)
+
+    result = asyncio.run(put_object_from_file(object_name, str(file)))
+    assert result.resp.status == 200
+    assert oss2_bucket.get_object(object_name).read() == data
