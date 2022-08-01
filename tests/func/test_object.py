@@ -169,3 +169,16 @@ def test_put_object_from_file(
     result = asyncio.run(put_object_from_file(object_name, str(file)))
     assert result.resp.status == 200
     assert oss2_bucket.get_object(object_name).read() == data
+
+
+def test_get_object_to_file(tmpdir: "local", bucket: "AioBucket", number_file):
+    file = tmpdir / "file"
+
+    async def get_object_to_file(object_name, file):
+        async with bucket as aiobucket:
+            resp = await aiobucket.get_object_to_file(object_name, file)
+            async with resp as result:
+                return await result.read()
+
+    result = asyncio.run(get_object_to_file(number_file, str(file)))
+    assert result == NUMBERS
