@@ -17,9 +17,9 @@ from typing import (
 
 from oss2 import Bucket, defaults, models
 from oss2.api import _make_range_string, _normalize_endpoint, _UrlMaker
-from oss2.compat import to_string
+from oss2.compat import to_string, to_unicode
 from oss2.exceptions import ClientError, NoSuchKey
-from oss2.http import CaseInsensitiveDict, Request
+from oss2.http import CaseInsensitiveDict
 from oss2.models import (
     AppendObjectResult,
     GetBucketInfoResult,
@@ -44,7 +44,7 @@ from oss2.xml_utils import (
 )
 
 from .exceptions import make_exception
-from .http import AioSession
+from .http import AioSession, Request
 from .models import AioGetObjectResult
 
 if TYPE_CHECKING:
@@ -118,22 +118,11 @@ class _AioBase:  # pylint: disable=too-few-public-methods
             app_name=self.app_name,
             **kwargs,
         )
-        req.headers["Content-Type"] = "application/octet-stream"
         self.auth._sign_request(  # pylint: disable=protected-access
             req, bucket_name, key
         )
 
-        if req.headers.get("Accept-Encoding") is None:
-            req.headers.pop("Accept-Encoding")
-
         assert self.session
-        logger.debug(
-            "Start to %s, bucket: %s, key: %s, params: %s",
-            method,
-            bucket_name,
-            to_string(key),
-            kwargs,
-        )
         resp: "AioResponse" = await self.session.do_request(
             req, timeout=self.timeout
         )
@@ -411,7 +400,7 @@ class AioBucket(_AioBase):
         key: str,
         params: Optional[Union[dict, CaseInsensitiveDict]] = None,
         headers: Optional[Dict] = None,
-    ) -> GetObjectMetaResult:
+    ) -> "GetObjectMetaResult":
         """get meta data from object
 
         Args:
@@ -478,7 +467,7 @@ class AioBucket(_AioBase):
         headers: Optional[Dict] = None,
         progress_callback: Optional[Callable] = None,
         init_crc: Optional[int] = None,
-    ) -> AppendObjectResult:
+    ) -> "AppendObjectResult":
         """Append value to an object
 
         Args:
@@ -515,6 +504,34 @@ class AioBucket(_AioBase):
             check_crc("append object", data.crc, result.crc, result.request_id)
 
         return result
+
+    async def put_object_from_file(
+        self,
+        key: str,
+        filename: str,
+        headers: Optional[Dict] = None,
+        progress_callback: Optional[Callable] = None,
+    ) -> "PutObjectResult":
+        """Upload a local file to a oss key
+
+        Args:
+            key (str): key of the oss
+            filename (str): filename to upload
+            headers (Optional[Dict], optional): HTTP headers to specify.
+            progress_callback (Optional[Callable], optional): callback function
+                for progress bar.
+
+        Returns:
+            _type_: _description_
+        """
+        headers = set_content_type(CaseInsensitiveDict(headers), filename)
+        with open(to_unicode(filename), "rb") as f_stream:
+            return await self.put_object(
+                key,
+                f_stream,
+                headers=headers,
+                progress_callback=progress_callback,
+            )
 
 
 # pylint: disable=too-few-public-methods

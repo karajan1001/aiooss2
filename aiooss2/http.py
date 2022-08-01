@@ -9,14 +9,53 @@ from aiohttp import ClientSession, TCPConnector
 from aiohttp.client_exceptions import ClientResponseError
 from oss2 import defaults
 from oss2.exceptions import RequestError
-from oss2.http import _CHUNK_SIZE, Response
+from oss2.http import _CHUNK_SIZE, USER_AGENT, CaseInsensitiveDict, Response
 
 if TYPE_CHECKING:
     from aiohttp.client_reqrep import ClientResponse
-    from oss2.http import Request
 
 
 logger = logging.getLogger(__name__)
+
+
+class Request:  # pylint: disable=too-few-public-methods
+    """Request class for aiohttp"""
+
+    def __init__(  # pylint: disable=too-many-arguments
+        self,
+        method,
+        url,
+        data=None,
+        params=None,
+        headers=None,
+        app_name="",
+        proxies=None,
+    ):
+        self.method = method
+        self.url = url
+        self.data = data
+        self.params = params or {}
+        self.proxies = proxies
+
+        if not isinstance(headers, CaseInsensitiveDict):
+            self.headers = CaseInsensitiveDict(headers)
+        else:
+            self.headers = headers
+
+        self.headers["Content-Type"] = "application/octet-stream"
+        if "User-Agent" not in self.headers:
+            if app_name:
+                self.headers["User-Agent"] = USER_AGENT + "/" + app_name
+            else:
+                self.headers["User-Agent"] = USER_AGENT
+
+        logger.debug(
+            "Init request, method: %s, url: %s, params: %s, headers: %s",
+            method,
+            url,
+            params,
+            headers,
+        )
 
 
 class AioResponse(Response):
