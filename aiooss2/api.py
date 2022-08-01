@@ -10,6 +10,7 @@ from typing import (
     TYPE_CHECKING,
     Callable,
     Dict,
+    List,
     Optional,
     Sequence,
     Type,
@@ -23,6 +24,7 @@ from oss2.exceptions import ClientError, NoSuchKey
 from oss2.http import CaseInsensitiveDict
 from oss2.models import (
     AppendObjectResult,
+    BatchDeleteObjectsResult,
     GetBucketInfoResult,
     GetObjectMetaResult,
     ListBucketsResult,
@@ -32,6 +34,7 @@ from oss2.models import (
 )
 from oss2.utils import (
     check_crc,
+    content_md5,
     is_valid_bucket_name,
     is_valid_endpoint,
     make_crc_adapter,
@@ -39,9 +42,11 @@ from oss2.utils import (
     set_content_type,
 )
 from oss2.xml_utils import (
+    parse_batch_delete_objects,
     parse_get_bucket_info,
     parse_list_buckets,
     parse_list_objects,
+    to_batch_delete_objects_request,
 )
 
 from .exceptions import make_exception
@@ -595,6 +600,40 @@ class AioBucket(_AioBase):
                     )
 
             return result
+
+    async def batch_delete_objects(
+        self, key_list: List[str], headers: Optional[Dict] = None
+    ) -> BatchDeleteObjectsResult:
+        """Delete a batch of objects
+
+        Args:
+            key_list (List[str]): list of objects to delete.
+            headers (Optional[Dict], optional): HTTP headers to specify.
+
+        Raises:
+            ClientError:
+
+        Returns:
+            BatchDeleteObjectResult:
+        """
+        if not key_list:
+            raise ClientError("key_list should not be empty")
+
+        data = to_batch_delete_objects_request(key_list, False)
+
+        headers = CaseInsensitiveDict(headers)
+        headers["Content-MD5"] = content_md5(data)
+
+        resp = await self.__do_object(
+            "POST",
+            "",
+            data=data,
+            params={"delete": "", "encoding-type": "url"},
+            headers=headers,
+        )
+        return await self._parse_result(
+            resp, parse_batch_delete_objects, BatchDeleteObjectsResult
+        )
 
 
 # pylint: disable=too-few-public-methods

@@ -182,3 +182,30 @@ def test_get_object_to_file(tmpdir: "local", bucket: "AioBucket", number_file):
 
     result = asyncio.run(get_object_to_file(number_file, str(file)))
     assert result == NUMBERS
+
+
+def test_batch_delete_objects(
+    bucket: "AioBucket", oss2_bucket: "Bucket", test_path
+):
+    data = b"\x01" * 2
+    function_name = inspect.stack()[0][0].f_code.co_name
+    object_path = f"{test_path}/{function_name}"
+    deleted = []
+    expected = []
+    for i in range(10):
+        obj = f"{object_path}/{i}"
+        oss2_bucket.put_object(obj, data)
+        if i > 4:
+            deleted.append(obj)
+        else:
+            expected.append(obj)
+
+    async def batch_delete_objects(file_list):
+        async with bucket as aiobucket:
+            return await aiobucket.batch_delete_objects(file_list)
+
+    result = asyncio.run(batch_delete_objects(deleted))
+    assert [
+        obj.key for obj in ObjectIterator(oss2_bucket, prefix=object_path)
+    ] == expected
+    assert result.deleted_keys == deleted
