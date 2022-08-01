@@ -5,6 +5,7 @@ Module for Bucket and Service
 # pylint: disable=too-many-instance-attributes
 
 import logging
+import shutil
 from typing import (
     TYPE_CHECKING,
     Callable,
@@ -46,6 +47,7 @@ from oss2.xml_utils import (
 from .exceptions import make_exception
 from .http import AioSession, Request
 from .models import AioGetObjectResult
+from .utils import copyfileobj_and_verify
 
 if TYPE_CHECKING:
     from oss2 import AnonymousAuth, Auth, StsAuth
@@ -532,6 +534,67 @@ class AioBucket(_AioBase):
                 headers=headers,
                 progress_callback=progress_callback,
             )
+
+    async def get_object_to_file(
+        self,
+        key: str,
+        filename: str,
+        byte_range: Optional[Sequence[int]] = None,
+        headers: Optional[Union[Dict, CaseInsensitiveDict]] = None,
+        progress_callback: Optional[Callable] = None,
+        process: Optional[Callable] = None,
+        params: Optional[Dict] = None,
+    ) -> AioGetObjectResult:
+        """Download contents of object to file.
+
+        Args:
+            key (str): object name to download.
+            filename (str): filename to save the data downloaded.
+            byte_range (Optional[Sequence[Optional[int]]], optional):
+                Range to download.
+            headers (Optional[dict], optional): HTTP headers to specify.
+            progress_callback (Optional[Callable], optional): callback function
+                for progress bar.
+            process (_type_, optional): oss file process method.
+            params (Optional[Dict], optional):
+
+        Returns:
+            AioGetObjectResult:
+        """
+        with open(to_unicode(filename), "wb") as f_w:
+            result = await self.get_object(
+                key,
+                byte_range=byte_range,
+                headers=headers,
+                progress_callback=progress_callback,
+                process=process,
+                params=params,
+            )
+
+            if result.content_length is None:
+                shutil.copyfileobj(result, f_w)
+            else:
+                copyfileobj_and_verify(
+                    result,
+                    f_w,
+                    result.content_length,
+                    request_id=result.request_id,
+                )
+
+            if self.enable_crc and byte_range is None:
+                if (
+                    (headers is None)
+                    or ("Accept-Encoding" not in headers)
+                    or (headers["Accept-Encoding"] != "gzip")
+                ):
+                    check_crc(
+                        "get",
+                        result.client_crc,
+                        result.server_crc,
+                        result.request_id,
+                    )
+
+            return result
 
 
 # pylint: disable=too-few-public-methods
