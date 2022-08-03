@@ -1,4 +1,4 @@
-# aiooss22
+# aiooss2
 
 Async client for aliyun OSS(Object Storage Service) using oss2 and aiohttp_/asyncio_.
 
