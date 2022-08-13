@@ -38,8 +38,6 @@ from oss2.utils import (
     content_md5,
     is_valid_bucket_name,
     is_valid_endpoint,
-    make_crc_adapter,
-    make_progress_adapter,
     set_content_type,
 )
 from oss2.xml_utils import (
@@ -53,7 +51,7 @@ from oss2.xml_utils import (
 from .exceptions import make_exception
 from .http import AioSession, Request
 from .models import AioGetObjectResult
-from .utils import copyfileobj_and_verify
+from .utils import copyfileobj_and_verify, make_adapter
 
 if TYPE_CHECKING:
     from oss2 import AnonymousAuth, Auth, StsAuth
@@ -276,11 +274,11 @@ class AioBucket(_AioBase):
         """
         headers = set_content_type(CaseInsensitiveDict(headers), key)
 
-        if progress_callback:
-            data = make_progress_adapter(data, progress_callback)
-
-        if self.enable_crc:
-            data = make_crc_adapter(data)
+        data = make_adapter(
+            data,
+            progress_callback=progress_callback,
+            enable_crc=self.enable_crc,
+        )
 
         resp: "AioResponse" = await self.__do_object(
             "PUT", key, data=data, headers=headers
@@ -492,11 +490,11 @@ class AioBucket(_AioBase):
         """
         headers = set_content_type(CaseInsensitiveDict(headers), key)
 
-        if progress_callback:
-            data = make_progress_adapter(data, progress_callback)
-
-        if self.enable_crc and init_crc is not None:
-            data = make_crc_adapter(data, init_crc)
+        data = make_adapter(
+            data,
+            progress_callback=progress_callback,
+            enable_crc=self.enable_crc,
+        )
 
         resp = await self.__do_object(
             "POST",
