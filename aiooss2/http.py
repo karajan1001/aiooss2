@@ -70,7 +70,7 @@ class AioResponse(Response):
         super().__init__(response)
         self.__all_read = False
 
-    async def read(self, amt=None) -> bytes:
+    async def aread(self, amt=None) -> bytes:
         """read the contents from the response"""
         if self.__all_read:
             return b""
@@ -88,6 +88,9 @@ class AioResponse(Response):
 
         self.__all_read = True
         return content
+
+    async def read(self, amt=None) -> bytes:
+        return await self.aread(amt)
 
     async def __iter__(self):
         """content iterator"""
