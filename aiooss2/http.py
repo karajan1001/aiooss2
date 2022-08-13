@@ -76,15 +76,22 @@ class AioResponse(Response):
             return b""
 
         if amt:
-            raise NotImplementedError
+            async for chunk in self.response.content.iter_chunked(amt):
+                return chunk
+            self.__all_read = True
+            return b""
 
-        content = await self.response.read()
+        content_list = []
+        async for chunk in self.response.content.iter_chunked(_CHUNK_SIZE):
+            content_list.append(chunk)
+        content = b"".join(content_list)
+
         self.__all_read = True
         return content
 
     async def __iter__(self):
         """content iterator"""
-        return await self.response.content.readchunk(_CHUNK_SIZE)
+        return await self.response.content.iter_chunked(_CHUNK_SIZE)
 
     def release(self):
         """release the response"""
