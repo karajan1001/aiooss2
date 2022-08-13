@@ -230,3 +230,26 @@ def test_copy_objects(
         obj.key for obj in ObjectIterator(oss2_bucket, prefix=object_path)
     ] == [object_path]
     assert oss2_bucket.get_object(object_path).read() == NUMBERS
+
+
+def test_put_object_from_middle_of_file(
+    tmpdir: "local", bucket: "AioBucket", oss2_bucket: "Bucket", test_path
+):
+    data = b"1234567890\n"
+    function_name = inspect.stack()[0][0].f_code.co_name
+    object_name = f"{test_path}/{function_name}"
+    file = tmpdir / "file"
+    file.write(data * 2)
+
+    async def put(object_name, data):
+        async with bucket as aiobucket:
+            return await aiobucket.put_object(object_name, data)
+
+    with open(file, "rb") as f_r:
+        assert f_r.readline() == data.strip() + os.linesep.encode()
+        result = asyncio.run(put(object_name, f_r))
+    assert result.resp.status == 200
+    assert (
+        oss2_bucket.get_object(object_name).read()
+        == data.strip() + os.linesep.encode()
+    )
