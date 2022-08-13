@@ -13,6 +13,9 @@ from oss2.utils import (
     _BytesAndFileAdapter,
     _FileLikeAdapter,
     _get_data_size,
+    _invoke_cipher_callback,
+    _invoke_crc_callback,
+    _invoke_progress_callback,
     _IterableAdapter,
 )
 
@@ -68,6 +71,9 @@ def make_adapter(  # pylint: disable=too-many-arguments
 
     data = to_bytes(data)
 
+    if not enable_crc and not progress_callback:
+        return data
+
     if size is None:
         size = _get_data_size(data)
 
@@ -86,7 +92,7 @@ def make_adapter(  # pylint: disable=too-many-arguments
         )
 
     if hasattr(data, "read"):
-        return _FileLikeAdapter(
+        return FileAdapter(
             data,
             progress_callback,
             crc_callback=crc_callback,
@@ -111,6 +117,34 @@ class BytesAndStringAdapter(_BytesAndFileAdapter):
 
     def __len__(self):
         return self.size
+
+    async def aread(self, amt: Optional[int] = None):
+        """read data
+
+        Args:
+            amt (int, optional): batch size of the data to read
+        """
+        if self.offset >= self.size:
+            return to_bytes("")
+
+        if amt is None or amt < 0:
+            bytes_to_read = self.size - self.offset
+        else:
+            bytes_to_read = min(amt, self.size - self.offset)
+
+        content = await self.data.read(bytes_to_read)
+
+        self.offset += bytes_to_read
+
+        _invoke_progress_callback(
+            self.progress_callback, min(self.offset, self.size), self.size
+        )
+
+        _invoke_crc_callback(self.crc_callback, content)
+
+        content = _invoke_cipher_callback(self.cipher_callback, content)
+
+        return content
 
 
 class BytesOrStringPayload(Payload):
@@ -145,7 +179,57 @@ class BytesOrStringPayload(Payload):
             )
 
     async def write(self, writer: AbstractStreamWriter) -> None:
+        """payload data writer
+
+        Args:
+            writer (AbstractStreamWriter): _description_
+        """
         await writer.write(self._value.read())
+
+
+class FileAdapter(_FileLikeAdapter):
+    """adapter for those data do not know its size."""
+
+    async def aread(self, amt=None):
+        """async read read from the fileobj
+
+        Args:
+            amt (_type_, optional): _description_. Defaults to None.
+
+        Returns:
+            _type_: _description_
+        """
+        offset_start = self.offset
+        if offset_start < self.discard and amt and self.cipher_callback:
+            amt += self.discard
+
+        content = await self.fileobj.read(amt)
+        if not content:
+            self.read_all = True
+            _invoke_progress_callback(
+                self.progress_callback, self.offset, None
+            )
+        else:
+            _invoke_progress_callback(
+                self.progress_callback, self.offset, None
+            )
+
+            self.offset += len(content)
+
+            real_discard = 0
+            if offset_start < self.discard:
+                if len(content) <= self.discard:
+                    real_discard = len(content)
+                else:
+                    real_discard = self.discard
+
+            _invoke_crc_callback(self.crc_callback, content, real_discard)
+            content = _invoke_cipher_callback(
+                self.cipher_callback, content, real_discard
+            )
+
+            self.discard -= real_discard
+        return content
 
 
 PAYLOAD_REGISTRY.register(BytesOrStringPayload, _BytesAndFileAdapter)

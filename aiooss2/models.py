@@ -37,6 +37,7 @@ class AioGetObjectResult(GetObjectResult):
     ):
         super(GetObjectResult, self).__init__(resp)
         self.__crypto_provider = crypto_provider
+        self.__crc_enabled = crc_enabled
 
         self.content_range = _hget(resp.headers, "Content-Range")
         if self.content_range:
@@ -142,3 +143,14 @@ class AioGetObjectResult(GetObjectResult):
 
     async def __aexit__(self, *args):
         self.resp.release()
+
+    @property
+    def client_crc(self):
+        if self.__crc_enabled:
+            return self.stream.crc
+        return None
+
+    async def read(
+        self, amt=None
+    ):  # pylint: disable=invalid-overridden-method
+        return await self.stream.aread(amt)

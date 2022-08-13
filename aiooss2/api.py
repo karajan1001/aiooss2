@@ -98,7 +98,7 @@ class _AioBase:  # pylint: disable=too-few-public-methods
         self.session = session
         self.timeout = connect_timeout or defaults.connect_timeout
         self.app_name = app_name
-        self.enable_crc = False
+        self.enable_crc = enable_crc
         self.proxies = proxies
 
         self._make_url = _UrlMaker(self.endpoint, is_cname)
@@ -578,27 +578,27 @@ class AioBucket(_AioBase):
             if result.content_length is None:
                 shutil.copyfileobj(result, f_w)
             else:
-                copyfileobj_and_verify(
+                await copyfileobj_and_verify(
                     result,
                     f_w,
                     result.content_length,
                     request_id=result.request_id,
                 )
 
-            if self.enable_crc and byte_range is None:
-                if (
-                    (headers is None)
-                    or ("Accept-Encoding" not in headers)
-                    or (headers["Accept-Encoding"] != "gzip")
-                ):
-                    check_crc(
-                        "get",
-                        result.client_crc,
-                        result.server_crc,
-                        result.request_id,
-                    )
+        if self.enable_crc and byte_range is None:
+            if (
+                (headers is None)
+                or ("Accept-Encoding" not in headers)
+                or (headers["Accept-Encoding"] != "gzip")
+            ):
+                check_crc(
+                    "get",
+                    result.client_crc,
+                    result.server_crc,
+                    result.request_id,
+                )
 
-            return result
+        return result
 
     async def batch_delete_objects(
         self, key_list: List[str], headers: Optional[Dict] = None

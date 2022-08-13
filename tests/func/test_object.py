@@ -26,7 +26,10 @@ def file_level_path(test_directory):
     return f"{test_directory}/{file_name}"
 
 
-def test_put_object(bucket: "AioBucket", oss2_bucket: "Bucket", test_path):
+@pytest.mark.parametrize("enable_crc", [True, False])
+def test_put_object(
+    bucket: "AioBucket", oss2_bucket: "Bucket", test_path, enable_crc: bool
+):
     data = b"\x01" * 1024
     function_name = inspect.stack()[0][0].f_code.co_name
     object_name = f"{test_path}/{function_name}"
@@ -35,19 +38,24 @@ def test_put_object(bucket: "AioBucket", oss2_bucket: "Bucket", test_path):
         async with bucket as aiobucket:
             return await aiobucket.put_object(object_name, data)
 
+    bucket.enable_crc = enable_crc
     result = asyncio.run(put(object_name, data))
+    bucket.enable_crc = not enable_crc
     assert result.resp.status == 200
     assert oss2_bucket.get_object(object_name).read() == data
 
 
-def test_get_object(bucket: "AioBucket", number_file):
+@pytest.mark.parametrize("enable_crc", [True, False])
+def test_get_object(bucket: "AioBucket", number_file, enable_crc: bool):
     async def get(object_name):
         async with bucket as aiobucket:
             resp = await aiobucket.get_object(object_name)
             async with resp as result:
                 return await result.read()
 
+    bucket.enable_crc = enable_crc
     result = asyncio.run(get(number_file))
+    bucket.enable_crc = not enable_crc
     assert result == NUMBERS
 
 
@@ -153,8 +161,13 @@ def test_append_object(bucket: "AioBucket", oss2_bucket: "Bucket", test_path):
     assert oss2_bucket.get_object(object_name).read() == data + append_data
 
 
+@pytest.mark.parametrize("enable_crc", [True, False])
 def test_put_object_from_file(
-    tmpdir: "local", bucket: "AioBucket", oss2_bucket: "Bucket", test_path
+    tmpdir: "local",
+    bucket: "AioBucket",
+    oss2_bucket: "Bucket",
+    test_path,
+    enable_crc: bool,
 ):
     data = b"123456789" * 10
     function_name = inspect.stack()[0][0].f_code.co_name
@@ -166,12 +179,17 @@ def test_put_object_from_file(
         async with bucket as aiobucket:
             return await aiobucket.put_object_from_file(object_name, file)
 
+    bucket.enable_crc = enable_crc
     result = asyncio.run(put_object_from_file(object_name, str(file)))
+    bucket.enable_crc = not enable_crc
     assert result.resp.status == 200
     assert oss2_bucket.get_object(object_name).read() == data
 
 
-def test_get_object_to_file(tmpdir: "local", bucket: "AioBucket", number_file):
+@pytest.mark.parametrize("enable_crc", [True, False])
+def test_get_object_to_file(
+    tmpdir: "local", bucket: "AioBucket", number_file, enable_crc: bool
+):
     file = tmpdir / "file"
 
     async def get_object_to_file(object_name, file):
@@ -180,8 +198,10 @@ def test_get_object_to_file(tmpdir: "local", bucket: "AioBucket", number_file):
             async with resp as result:
                 return await result.read()
 
-    result = asyncio.run(get_object_to_file(number_file, str(file)))
-    assert result == NUMBERS
+    bucket.enable_crc = enable_crc
+    asyncio.run(get_object_to_file(number_file, str(file)))
+    bucket.enable_crc = not enable_crc
+    assert file.read_binary() == NUMBERS
 
 
 def test_batch_delete_objects(
