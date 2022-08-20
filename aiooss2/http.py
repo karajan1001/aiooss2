@@ -1,7 +1,6 @@
 """
 aiooss2.http
 """
-# pylint: disable=invalid-overridden-method
 import logging
 from typing import TYPE_CHECKING, Optional
 
@@ -9,7 +8,7 @@ from aiohttp import ClientSession, TCPConnector
 from aiohttp.client_exceptions import ClientResponseError
 from oss2 import defaults
 from oss2.exceptions import RequestError
-from oss2.http import _CHUNK_SIZE, USER_AGENT, CaseInsensitiveDict, Response
+from oss2.http import _CHUNK_SIZE, USER_AGENT, CaseInsensitiveDict
 
 if TYPE_CHECKING:
     from aiohttp.client_reqrep import ClientResponse
@@ -58,7 +57,7 @@ class Request:  # pylint: disable=too-few-public-methods
         )
 
 
-class AioResponse(Response):
+class AioResponse:
     """Async Version of the response wrapper adapting to the
     aiooss2 api
     """
@@ -66,11 +65,19 @@ class AioResponse(Response):
     response: "ClientResponse"
 
     def __init__(self, response: "ClientResponse"):
-        response.status_code = response.status  # type: ignore[attr-defined]
-        super().__init__(response)
+        self.response = response
+        self.status = response.status
+        self.headers = response.headers
+        self.request_id = response.headers.get("x-oss-request-id", "")
         self.__all_read = False
+        logger.debug(
+            "Get response headers, req-id: %s, status: %d, headers: %s",
+            self.request_id,
+            self.status,
+            self.headers,
+        )
 
-    async def aread(self, amt=None) -> bytes:
+    async def read(self, amt=None) -> bytes:
         """read the contents from the response"""
         if self.__all_read:
             return b""
@@ -89,10 +96,7 @@ class AioResponse(Response):
         self.__all_read = True
         return content
 
-    async def read(self, amt=None) -> bytes:
-        return await self.aread(amt)
-
-    async def __iter__(self):
+    async def __aiter__(self):
         """content iterator"""
         return await self.response.content.iter_chunked(_CHUNK_SIZE)
 

@@ -1,6 +1,7 @@
 """
 Utils used in project.
 """
+import inspect
 import logging
 from typing import Callable, Optional
 
@@ -8,7 +9,12 @@ from oss2.compat import to_bytes
 from oss2.exceptions import ClientError, InconsistentError
 from oss2.utils import Crc64, _get_data_size, _IterableAdapter
 
-from aiooss2.adapter import BytesAndStringAdapter, FileAdapter
+from aiooss2.adapter import (
+    AsyncSizedAdapter,
+    AsyncUnsizedAdapter,
+    SyncSizedAdapter,
+    SyncUnsizedAdapter,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +81,15 @@ def make_adapter(  # pylint: disable=too-many-arguments
             raise ClientError(
                 "Bytes of file object adapter does not support discard bytes"
             )
-        return BytesAndStringAdapter(
+        if hasattr(data, "read") and inspect.iscoroutinefunction(data.read):
+            return AsyncSizedAdapter(
+                data,
+                progress_callback=progress_callback,
+                size=size,
+                crc_callback=crc_callback,
+            )
+
+        return SyncSizedAdapter(
             data,
             progress_callback=progress_callback,
             size=size,
@@ -83,11 +97,18 @@ def make_adapter(  # pylint: disable=too-many-arguments
         )
 
     if hasattr(data, "read"):
-        return FileAdapter(
+        if inspect.iscoroutinefunction(data.read):
+            return AsyncUnsizedAdapter(
+                data,
+                progress_callback=progress_callback,
+                discard=discard,
+                crc_callback=crc_callback,
+            )
+        return SyncUnsizedAdapter(
             data,
-            progress_callback,
-            crc_callback=crc_callback,
+            progress_callback=progress_callback,
             discard=discard,
+            crc_callback=crc_callback,
         )
 
     if hasattr(data, "__iter__"):

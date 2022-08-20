@@ -3,7 +3,7 @@ Module for all input and output classes for the Python SDK API
 """
 import copy
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Awaitable, Optional
 
 from oss2.exceptions import ClientError
 from oss2.headers import (
@@ -11,7 +11,7 @@ from oss2.headers import (
     KMS_ALI_WRAP_ALGORITHM,
     OSS_CLIENT_SIDE_ENCRYPTION_KEY,
 )
-from oss2.models import ContentCryptoMaterial, GetObjectResult, _hget
+from oss2.models import ContentCryptoMaterial, HeadObjectResult, _hget
 
 from aiooss2.utils import make_adapter
 
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class AioGetObjectResult(GetObjectResult):
+class AioGetObjectResult(HeadObjectResult):
     """class for the result of api get_object"""
 
     resp: "AioResponse"
@@ -35,7 +35,7 @@ class AioGetObjectResult(GetObjectResult):
         crypto_provider=None,
         discard=0,
     ):
-        super(GetObjectResult, self).__init__(resp)
+        super().__init__(resp)
         self.__crypto_provider = crypto_provider
         self.__crc_enabled = crc_enabled
 
@@ -144,13 +144,35 @@ class AioGetObjectResult(GetObjectResult):
     async def __aexit__(self, *args):
         self.resp.release()
 
+    async def __aiter__(self):
+        async for data in self.stream:
+            return data
+
+    @staticmethod
+    def _parse_range_str(content_range):
+        # :param str content_range: sample 'bytes 0-128/1024'
+        range_data = (content_range.split(" ", 2)[1]).split("/", 2)[0]
+        range_start, range_end = range_data.split("-", 2)
+        return int(range_start), int(range_end)
+
+    def close(self):
+        """close the response response"""
+        self.resp.response.close()
+
     @property
     def client_crc(self):
+        """the client crc"""
         if self.__crc_enabled:
             return self.stream.crc
         return None
 
-    async def read(
-        self, amt=None
-    ):  # pylint: disable=invalid-overridden-method
-        return await self.stream.aread(amt)
+    async def read(self, amt: Optional[int] = None) -> Awaitable[bytes]:
+        """async read data from stream
+
+        Args:
+            amt (int, optional): batch size of the data to read
+
+        Returns:
+            Awaitable[bytes]:
+        """
+        return await self.stream.read(amt)
