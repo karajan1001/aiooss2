@@ -303,10 +303,8 @@ class AioBucket(_AioBase):
         """download the contents of an object
 
         (use case) ::
-            >>> resp = await bucket.get_object("helloword")
-            >>> async with resp as result:
-            >>>     data = await result.read()
-            >>> print(data)
+            >>> async with await bucket.get_object("helloword") as result
+            >>>     print(await result.read())
             'hello world'
 
         Args:
@@ -348,6 +346,16 @@ class AioBucket(_AioBase):
     ) -> "RequestResult":
         """delete an object
 
+        (use case) ::
+            >>> async for obj in AioObjectIterator(bucket):
+            >>>    print(obj.key)
+            'object1'
+            'object2'
+            >>> await bucket.delete_object("object1")
+            >>> async for obj in AioObjectIterator(bucket):
+            >>>    print(obj.key)
+            'object2'
+
         Args:
             key (str): _description_
             headers (Optional[Dict], optional): HTTP headers to specify.
@@ -372,6 +380,12 @@ class AioBucket(_AioBase):
         headers: Optional[Dict] = None,
     ) -> "ListObjectsResult":
         """list objects in a bucket
+
+        (use case) ::
+            >>> async for obj in AioObjectIterator(bucket, prefix=object_path):
+            >>>    print(obj.key)
+            'object1'
+            'object2'
 
         Args:
             prefix (str, optional): only list objects start with this prefix.
@@ -409,6 +423,11 @@ class AioBucket(_AioBase):
     ) -> "GetObjectMetaResult":
         """get meta data from object
 
+        (use case) ::
+            >>> result = await bucket.get_object_meta(object_name)
+            >>> print(result.content_length )
+            256
+
         Args:
             key (str): object key
             params (Optional[Union[dict, CaseInsensitiveDict]], optional):
@@ -437,6 +456,11 @@ class AioBucket(_AioBase):
         """Return True if key exists, False otherwise. raise Exception
         for other exceptions.
 
+        (use case) ::
+            >>> result = await bucket.object_exists('object1')
+            >>> print(result)
+            True
+
         Args:
             key (str): key of the object
             headers (Optional[Union[Dict, CaseInsensitiveDict]], optional):
@@ -455,6 +479,11 @@ class AioBucket(_AioBase):
 
     async def get_bucket_info(self) -> GetBucketInfoResult:
         """Get bucket infomation, `Create time`, `Endpoint`, `Owner`, `ACL`
+
+        (use case) ::
+            >>> resp = await aiobucket.get_bucket_info()
+            >>> print(resp.name)
+            'bucket_name'
 
         Returns:
             GetBucketInfoResult
@@ -475,6 +504,15 @@ class AioBucket(_AioBase):
         init_crc: Optional[int] = None,
     ) -> "AppendObjectResult":
         """Append value to an object
+
+        (use case) ::
+            >>> async with await bucket.get_object("object1") as result
+            >>>     print(await result.read())
+            'hello world'
+            >>> resp = await bucket.append_object('object1', 11, "!!!")
+            >>> async with await bucket.get_object("object1") as result
+            >>>     print(await result.read())
+            'hello world!!!'
 
         Args:
             key (str): key of the object
@@ -520,6 +558,16 @@ class AioBucket(_AioBase):
     ) -> "PutObjectResult":
         """Upload a local file to a oss key
 
+        (use case) ::
+            >>> with open("file") as f:
+            >>>     print(f.read())
+            "hellow world"
+            >>> result = await aiobucket.put_object_from_file("object1",
+                "file")
+            >>> async with await bucket.get_object("object1") as result
+            >>>     print(await result.read())
+            'hello world'
+
         Args:
             key (str): key of the oss
             filename (str): filename to upload
@@ -550,6 +598,12 @@ class AioBucket(_AioBase):
         params: Optional[Dict] = None,
     ) -> AioGetObjectResult:
         """Download contents of object to file.
+
+        (use case) ::
+            >>> result = await aiobucket.get_object_to_file("object1", "file")
+            >>> with open("file") as f:
+            >>>     print(f.read())
+            "hellow world"
 
         Args:
             key (str): object name to download.
@@ -605,6 +659,23 @@ class AioBucket(_AioBase):
     ) -> BatchDeleteObjectsResult:
         """Delete a batch of objects
 
+        (use case) ::
+            >>> async for obj in AioObjectIterator(bucket, prefix=object_path):
+            >>>    print(obj.key)
+            'object1'
+            'object2'
+            'object3'
+            'object4'
+            'object5'
+            'object6'
+            >>> await aiobucket.batch_delete_objects(["object1", "object2",
+                "object3"])
+            >>> async for obj in AioObjectIterator(bucket, prefix=object_path):
+            >>>    print(obj.key)
+            'object4'
+            'object5'
+            'object6'
+
         Args:
             key_list (List[str]): list of objects to delete.
             headers (Optional[Dict], optional): HTTP headers to specify.
@@ -643,6 +714,16 @@ class AioBucket(_AioBase):
         params: Optional[Dict] = None,
     ) -> PutObjectResult:
         """copy object to another place
+
+        (use case) ::
+            >>> async for obj in AioObjectIterator(bucket, prefix=object_path):
+            >>>    print(obj.key)
+            'object1'
+            >>> await aiobucket.copy_object(bucket_name, "object1", "object2")
+            >>> async for obj in AioObjectIterator(bucket, prefix=object_path):
+            >>>    print(obj.key)
+            'object1'
+            'object2'
 
         Args:
             source_bucket_name (str): source object bucket
@@ -718,6 +799,13 @@ class AioService(_AioBase):
         params: Optional[Dict] = None,
     ) -> ListBucketsResult:
         """List buckets with given prefix of an user
+
+        (use case) ::
+            >>> async for obj in AioBucketIterator(aioservice):
+            >>>     print(obj.name)
+            'bucket_name1'
+            'bucket_name2'
+            ...
 
         Args:
             prefix (str, optional): prefix to filter the buckets results.
