@@ -106,7 +106,7 @@ class AsyncAdapter(StreamAdapter, ABC):
         """
 
 
-class SizedAdapter(StreamAdapter, ABC):
+class SizedAdapter(StreamAdapter):
     """Adapter for data that can have a fixed size"""
 
     def __init__(
@@ -171,9 +171,7 @@ class AsyncSizedAdapter(AsyncAdapter, SizedAdapter):
         return self._invoke_callbacks(content)
 
 
-class UnsizedAdapter(
-    StreamAdapter, ABC
-):  # pylint: disable=too-few-public-methods
+class UnsizedAdapter(StreamAdapter):  # pylint: disable=too-few-public-methods
     """Adapter for data that do not know its size."""
 
     def __init__(
@@ -216,12 +214,6 @@ class SyncUnsizedAdapter(SyncAdapter, UnsizedAdapter):
     data but do not know its size.
     """
 
-    def __init__(
-        self, stream: Union[bytes, str, IO], discard: int = 0, **kwargs
-    ):
-        SyncAdapter.__init__(self, stream, **kwargs)
-        UnsizedAdapter.__init__(stream, discard, **kwargs)
-
     def read(self, amt: Optional[int] = None) -> bytes:
         if self._read_all:
             return b""
@@ -245,6 +237,35 @@ class AsyncUnsizedAdapter(AsyncAdapter, UnsizedAdapter):
             amt += self.discard
 
         content = await self.stream.read(amt)
+        return self._invoke_callbacks(content)
+
+
+class IterableAdapterMixin(
+    StreamAdapter
+):  # pylint: disable=too-few-public-methods
+    """Mixin for iterable adapter"""
+
+    def _invoke_callbacks(self, content):
+        content = to_bytes(content)
+        self.offset += len(content)
+        _invoke_progress_callback(self.progress_callback, self.offset, None)
+        _invoke_crc_callback(self.crc_callback, content)
+        return _invoke_cipher_callback(self.cipher_callback, content)
+
+
+class SyncIterableAdapter(SyncAdapter, IterableAdapterMixin):
+    """Adapter for Iterable  data"""
+
+    def read(self, amt: Optional[int] = None) -> bytes:
+        content = next(self.stream)
+        return self._invoke_callbacks(content)
+
+
+class AsyncIterableAdapter(AsyncAdapter, IterableAdapterMixin):
+    """Adapter for Async Iterable data"""
+
+    async def read(self, amt: Optional[int] = None) -> Awaitable[bytes]:
+        content = await next(self.stream)
         return self._invoke_callbacks(content)
 
 
@@ -339,7 +360,33 @@ class AsyncUnsizedPayload(UnsizedPayload):
             chunk = await self._value.read(2**16)
 
 
+class SyncIterablePayload(UnsizedPayload):
+    """Payload of async data of unknown length"""
+
+    _value: SyncIterableAdapter
+
+    async def write(self, writer: AbstractStreamWriter) -> None:
+        chunk = self._value.read()
+        while chunk:
+            await writer.write(chunk)
+            chunk = self._value.read()
+
+
+class AsyncIterablePayload(UnsizedPayload):
+    """Payload of async data of unknown length"""
+
+    _value: AsyncIterableAdapter
+
+    async def write(self, writer: AbstractStreamWriter) -> None:
+        chunk = await self._value.read()
+        while chunk:
+            await writer.write(chunk)
+            chunk = await self._value.read()
+
+
 PAYLOAD_REGISTRY.register(SyncSizedPayload, SyncSizedAdapter)
 PAYLOAD_REGISTRY.register(AsyncSizedPayload, AsyncSizedAdapter)
 PAYLOAD_REGISTRY.register(SyncUnsizedPayload, SyncUnsizedAdapter)
 PAYLOAD_REGISTRY.register(AsyncUnsizedPayload, AsyncUnsizedAdapter)
+PAYLOAD_REGISTRY.register(SyncIterablePayload, SyncIterableAdapter)
+PAYLOAD_REGISTRY.register(AsyncIterablePayload, AsyncIterableAdapter)
