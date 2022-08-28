@@ -7,11 +7,14 @@ from typing import Callable, Optional
 
 from oss2.compat import to_bytes
 from oss2.exceptions import ClientError, InconsistentError
-from oss2.utils import Crc64, _get_data_size, _IterableAdapter
+from oss2.utils import Crc64, _get_data_size
 
 from aiooss2.adapter import (
+    AsyncIterableAdapter,
     AsyncSizedAdapter,
     AsyncUnsizedAdapter,
+    StreamAdapter,
+    SyncIterableAdapter,
     SyncSizedAdapter,
     SyncUnsizedAdapter,
 )
@@ -47,7 +50,7 @@ def make_adapter(  # pylint: disable=too-many-arguments
     enable_crc: bool = False,
     init_crc: int = 0,
     discard: int = 0,
-):
+) -> StreamAdapter:
     """Add crc calculation or progress bar callback to the data object.
 
     Args:
@@ -89,36 +92,48 @@ def make_adapter(  # pylint: disable=too-many-arguments
                 crc_callback=crc_callback,
             )
 
-        return SyncSizedAdapter(
+        wrapped_data = SyncSizedAdapter(
             data,
             progress_callback=progress_callback,
             size=size,
             crc_callback=crc_callback,
         )
-
-    if hasattr(data, "read"):
+    elif hasattr(data, "read"):
         if inspect.iscoroutinefunction(data.read):
-            return AsyncUnsizedAdapter(
+            wrapped_data = AsyncUnsizedAdapter(
                 data,
                 progress_callback=progress_callback,
                 discard=discard,
                 crc_callback=crc_callback,
             )
-        return SyncUnsizedAdapter(
+        wrapped_data = SyncUnsizedAdapter(
             data,
             progress_callback=progress_callback,
             discard=discard,
             crc_callback=crc_callback,
         )
-
-    if hasattr(data, "__iter__"):
+    elif hasattr(data, "__aiter__"):
         if discard and enable_crc:
             raise ClientError(
                 "Iterator adapter does not support discard bytes"
             )
-        return _IterableAdapter(
-            data, progress_callback, crc_callback=crc_callback
+        wrapped_data = AsyncIterableAdapter(
+            data,
+            progress_callback=progress_callback,
+            crc_callback=crc_callback,
         )
-    raise ClientError(
-        f"{data.__class__.__name__} is not a file object, nor an iterator"
-    )
+    elif hasattr(data, "__iter__"):
+        if discard and enable_crc:
+            raise ClientError(
+                "Iterator adapter does not support discard bytes"
+            )
+        wrapped_data = SyncIterableAdapter(
+            data,
+            progress_callback=progress_callback,
+            crc_callback=crc_callback,
+        )
+    else:
+        raise ClientError(
+            f"{data.__class__.__name__} is not a file object, nor an iterator"
+        )
+    return wrapped_data
