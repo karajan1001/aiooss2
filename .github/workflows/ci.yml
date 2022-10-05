@@ -21,7 +21,7 @@ jobs:
         python-version: 3.8
     - name: Install dependencies
       run: |
-        pip install ".[tests]" nox
+        pip install ".[dev]"
     - uses: pre-commit/action@v3.0.0
 
   tests:
@@ -46,7 +46,7 @@ jobs:
 
       - name: install dependencies
         run: |
-          python -m pip install ".[tests]" pip nox
+          python -m pip install ".[dev]" pip
           pip --version
           nox --version
 
