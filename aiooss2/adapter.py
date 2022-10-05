@@ -1,26 +1,18 @@
 """
 Adapter (crc check and progress bar call backs) for data types
 """
-import asyncio
+# pylint: disable=unnecessary-dunder-call
+import inspect
 import logging
+import os
 from abc import ABC, abstractmethod
-from typing import (
-    IO,
-    Any,
-    AsyncIterator,
-    Awaitable,
-    Callable,
-    Iterator,
-    Optional,
-    Union,
-)
+from typing import IO, AsyncIterator, Awaitable, Callable, Optional, Union
 
 from aiohttp.abc import AbstractStreamWriter
 from aiohttp.payload import PAYLOAD_REGISTRY, TOO_LARGE_BYTES_BODY, Payload
 from oss2.compat import to_bytes
 from oss2.utils import (
     _CHUNK_SIZE,
-    _get_data_size,
     _invoke_cipher_callback,
     _invoke_crc_callback,
     _invoke_progress_callback,
@@ -29,15 +21,17 @@ from oss2.utils import (
 logger = logging.getLogger(__name__)
 
 
-class StreamAdapter:  # pylint: disable=too-few-public-methods
+class StreamAdapter(ABC):
     """Adapter for data types"""
 
-    def __init__(
+    def __init__(  # pylint: disable=too-many-arguments
         self,
         stream: Union[bytes, IO],
         progress_callback: Optional[Callable] = None,
         crc_callback: Optional[Callable] = None,
         cipher_callback: Optional[Callable] = None,
+        size: Optional[int] = None,
+        discard: int = 0,
     ):
         """
         Args:
@@ -49,44 +43,16 @@ class StreamAdapter:  # pylint: disable=too-few-public-methods
                 function used for crc calculation.
             cipher_callback (Optional[Callable], optional):
                 function used for cipher calculation.
+            size: Optional[int] = None,
+            discard (int): bytes to discard.
         """
         self.stream = to_bytes(stream)
         self.progress_callback: Optional[Callable] = progress_callback
         self.crc_callback: Optional[Callable] = crc_callback
         self.cipher_callback: Optional[Callable] = cipher_callback
         self.offset = 0
-
-    @property
-    def crc(self):
-        """return crc value of the data"""
-        if self.crc_callback:
-            return self.crc_callback.crc
-        return None
-
-
-class SyncAdapter(StreamAdapter, ABC):
-    """Adapter for data with sync read method"""
-
-    def __iter__(self) -> Iterator:
-        return self
-
-    def __next__(self) -> bytes:
-        content = self.read(_CHUNK_SIZE)
-        if content:
-            return content
-        raise StopIteration
-
-    @abstractmethod
-    def read(self, amt=None) -> Awaitable[bytes]:
-        """sync api to read a chunk from the data
-
-        Args:
-            amt (int, optional): batch size of the data to read
-        """
-
-
-class AsyncAdapter(StreamAdapter, ABC):
-    """Adapter for data with async read method"""
+        self.size = size
+        self.discard = discard
 
     def __aiter__(self) -> AsyncIterator:
         return self
@@ -97,22 +63,52 @@ class AsyncAdapter(StreamAdapter, ABC):
             return content
         raise StopAsyncIteration
 
+    def __len__(self) -> int:
+        return self.size
+
     @abstractmethod
-    async def read(self, amt=None) -> Awaitable[bytes]:
+    async def read(self, amt=-1) -> Awaitable[bytes]:
         """async api to read a chunk from the data
 
         Args:
-            amt (int, optional): batch size of the data to read
+            amt (int): batch size of the data to read, -1 to read all
         """
 
+    @property
+    def crc(self):
+        """return crc value of the data"""
+        if self.crc_callback:
+            return self.crc_callback.crc
+        return None
 
-class SizedAdapter(StreamAdapter):
-    """Adapter for data that can have a fixed size"""
+    def _invoke_callbacks(self, content: Union[str, bytes]):
+        content = to_bytes(content)
+        self.offset += len(content)
+
+        real_discard = 0
+        if self.offset < self.discard:
+            real_discard = (
+                len(content) if len(content) <= self.discard else self.discard
+            )
+        self.discard -= real_discard
+
+        _invoke_progress_callback(
+            self.progress_callback, self.offset, self.size
+        )
+        _invoke_crc_callback(self.crc_callback, content, real_discard)
+        content = _invoke_cipher_callback(
+            self.cipher_callback, content, real_discard
+        )
+
+        return content
+
+
+class SliceableAdapter(StreamAdapter):
+    """Adapter for data can get a slice via `stream[a:b]`"""
 
     def __init__(
         self,
-        stream: Union[bytes, str, IO],
-        size: Optional[int] = None,
+        stream: Union[bytes, bytearray, memoryview],
         **kwargs,
     ):
         """
@@ -120,273 +116,105 @@ class SizedAdapter(StreamAdapter):
             size (Optional[int]):
                 size of the data stream.
         """
-        self.size = size or _get_data_size(stream)
         super().__init__(stream, **kwargs)
+        self.size = self.size or len(stream)
 
-    def __len__(self) -> int:
-        return self.size
-
-    def _length_to_read(self, amt: Optional[int]) -> int:
+    def _length_to_read(self, amt: int) -> int:
         length_to_read = self.size - self.offset
-        if amt and amt > 0:
+        if amt > 0:
             length_to_read = min(amt, length_to_read)
         return length_to_read
 
-    def _invoke_callbacks(self, content: bytes):
-        self.offset += len(content)
-        _invoke_progress_callback(
-            self.progress_callback, min(self.offset, self.size), self.size
-        )
-        if content:
-            _invoke_crc_callback(self.crc_callback, content)
-            content = _invoke_cipher_callback(self.cipher_callback, content)
-        return content
-
-
-class SyncSizedAdapter(SyncAdapter, SizedAdapter):
-    """Adapter for data can get its length via `len(size)`"""
-
-    def read(self, amt: Optional[int] = None) -> bytes:
+    async def read(self, amt: int = -1) -> Awaitable[bytes]:
         if self.offset >= self.size:
             return b""
         length_to_read = self._length_to_read(amt)
-        if hasattr(self.stream, "read"):
-            content = self.stream.read(length_to_read)
-        else:
-            content = self.stream[self.offset : self.offset + length_to_read]
+        content = self.stream[self.offset : self.offset + length_to_read]
         return self._invoke_callbacks(content)
 
 
-class AsyncSizedAdapter(AsyncAdapter, SizedAdapter):
-    """Adapter for file-like object"""
+class FilelikeObjectAdapter(StreamAdapter):
+    """Adapter for file like data objects"""
 
-    async def read(self, amt: Optional[int] = None) -> bytes:
-        if self.offset >= self.size:
-            return b""
-        length_to_read = self._length_to_read(amt)
-        if hasattr(self.stream, "read"):
-            content = await self.stream.read(length_to_read)
-        else:
-            content = self.stream[self.offset : self.offset + length_to_read]
-        return self._invoke_callbacks(content)
-
-
-class UnsizedAdapter(StreamAdapter):  # pylint: disable=too-few-public-methods
-    """Adapter for data that do not know its size."""
-
-    def __init__(
-        self, stream: Union[bytes, str, IO], discard: int = 0, **kwargs
-    ):
+    def __init__(self, stream, **kwargs):
         super().__init__(stream, **kwargs)
         self._read_all = False
-        self.discard = discard
-        self.size = None
+        if self.size is None:
+            try:
+                position = self.stream.tell()
+                end = self.stream.seek(0, os.SEEK_END)
+                self.stream.seek(position)
+                self.size = end - position
+            except AttributeError:
+                pass
 
-    def _invoke_callbacks(self, content):
+    async def read(self, amt: int = -1) -> Awaitable[bytes]:
+        if self._read_all:
+            return b""
+        if self.offset < self.discard and amt:
+            amt += self.discard - self.offset
+
+        if inspect.iscoroutinefunction(self.stream.read):
+            content = await self.stream.read(amt)
+        else:
+            content = self.stream.read(amt)
         if not content:
             self._read_all = True
-        else:
-
-            self.offset += len(content)
-
-            real_discard = 0
-            if self.offset < self.discard:
-                if len(content) <= self.discard:
-                    real_discard = len(content)
-                else:
-                    real_discard = self.discard
-
-            _invoke_progress_callback(
-                self.progress_callback, self.offset, None
-            )
-            _invoke_crc_callback(self.crc_callback, content, real_discard)
-            content = _invoke_cipher_callback(
-                self.cipher_callback, content, real_discard
-            )
-
-            self.discard -= real_discard
-        return content
-
-
-class SyncUnsizedAdapter(SyncAdapter, UnsizedAdapter):
-    """
-    Adapter for data that have a `read` method to get its
-    data but do not know its size.
-    """
-
-    def read(self, amt: Optional[int] = None) -> bytes:
-        if self._read_all:
-            return b""
-        if self.offset < self.discard and amt and self.cipher_callback:
-            amt += self.discard
-
-        content = self.stream.read(amt)
         return self._invoke_callbacks(content)
 
 
-class AsyncUnsizedAdapter(AsyncAdapter, UnsizedAdapter):
-    """
-    Adapter for data that have a async `read` method to get its
-    data but do not know its size.
-    """
-
-    async def read(self, amt: Optional[int] = None) -> bytes:
-        if self._read_all:
-            return b""
-        if self.offset < self.discard and amt and self.cipher_callback:
-            amt += self.discard
-
-        content = await self.stream.read(amt)
-        return self._invoke_callbacks(content)
-
-
-class IterableAdapterMixin(
-    StreamAdapter
-):  # pylint: disable=too-few-public-methods
-    """Mixin for iterable adapter"""
-
-    def _invoke_callbacks(self, content):
-        content = to_bytes(content)
-        self.offset += len(content)
-        _invoke_progress_callback(self.progress_callback, self.offset, None)
-        _invoke_crc_callback(self.crc_callback, content)
-        return _invoke_cipher_callback(self.cipher_callback, content)
-
-
-class SyncIterableAdapter(SyncAdapter, IterableAdapterMixin):
-    """Adapter for Iterable  data"""
-
-    def read(self, amt: Optional[int] = None) -> bytes:
-        content = next(self.stream)
-        return self._invoke_callbacks(content)
-
-
-class AsyncIterableAdapter(AsyncAdapter, IterableAdapterMixin):
+class IterableAdapter(StreamAdapter):
     """Adapter for Async Iterable data"""
 
-    async def read(self, amt: Optional[int] = None) -> Awaitable[bytes]:
-        content = await next(self.stream)
+    def __init__(self, stream, discard: int = 0, **kwargs):
+        if hasattr(stream, "__aiter__"):
+            stream = stream.__aiter__()
+        elif hasattr(stream, "__iter__"):
+            stream = iter(stream)
+        super().__init__(stream, **kwargs)
+        if discard:
+            raise ValueError(
+                "discard not supported in Async "
+                f"Iterable input {self.stream}"
+            )
+
+    async def read(self, amt: int = -1) -> Awaitable[bytes]:
+        try:
+            if hasattr(self.stream, "__anext__"):
+                content = await self.stream.__anext__()
+            elif hasattr(self.stream, "__next__"):
+                content = next(self.stream)
+            else:
+                raise AttributeError(
+                    f"{self.stream.__class__.__name__} is neither"
+                    " an iterator nor an async iterator"
+                )
+        except (StopIteration, StopAsyncIteration):
+            return b""
         return self._invoke_callbacks(content)
 
 
-class SizedPayload(Payload, ABC):
-    """Payload of data with a fixed length"""
-
-    def __init__(self, value: SizedAdapter, *args: Any, **kwargs: Any) -> None:
-        if "content_type" not in kwargs:
-            kwargs["content_type"] = "application/octet-stream"
-
-        super().__init__(value, *args, **kwargs)
-
-        self._size = len(value)
-
-
-class SyncSizedPayload(SizedPayload):
-    """Payload of data with a length attributes"""
-
-    _value: SyncSizedAdapter
-
-    def __init__(self, value: SyncSizedAdapter, *args, **kwargs):
-        if not isinstance(value, SyncSizedAdapter):
-            raise TypeError(
-                "value argument must be SyncSizedAdapter"
-                f", not {type(value)!r}"
-            )
-        super().__init__(value, *args, **kwargs)
-
-        if self._size > TOO_LARGE_BYTES_BODY:
-            kwargs = {"source": self}
-            logger.warning(
-                "Sending a large body directly with raw bytes might"
-                " lock the event loop. You should probably pass an "
-                "io.BytesIO object instead",
-                ResourceWarning,
-                **kwargs,
-            )
-
-    async def write(self, writer: AbstractStreamWriter) -> None:
-        await writer.write(self._value.read())
-
-
-class AsyncSizedPayload(SizedPayload):
-    """Payload of data with a length attributes"""
-
-    _value: AsyncSizedAdapter
-
-    def __init__(self, value: AsyncSizedAdapter, *args, **kwargs):
-        if not isinstance(value, AsyncSizedAdapter):
-            raise TypeError(
-                "value argument must be AsyncSizedAdapter"
-                f", not {type(value)!r}"
-            )
-        super().__init__(value, *args, **kwargs)
-
-    async def write(self, writer: AbstractStreamWriter) -> None:
-        await writer.write(await self._value.read())
-
-
-class UnsizedPayload(Payload, ABC):
-    """Payload of data of unknown length"""
-
-    def __init__(self, value: SizedAdapter, *args: Any, **kwargs: Any) -> None:
-        if "content_type" not in kwargs:
-            kwargs["content_type"] = "application/octet-stream"
-
-        super().__init__(value, *args, **kwargs)
-
-
-class SyncUnsizedPayload(UnsizedPayload):
-    """Payload of sync data of unknown length"""
-
-    _value: SyncUnsizedAdapter
-
-    async def write(self, writer: AbstractStreamWriter) -> None:
-        loop = asyncio.get_event_loop()
-        chunk = await loop.run_in_executor(None, self._value.read, 2**16)
-        while chunk:
-            await writer.write(chunk)
-            chunk = await loop.run_in_executor(None, self._value.read, 2**16)
-
-
-class AsyncUnsizedPayload(UnsizedPayload):
+class AsyncPayload(Payload):
     """Payload of async data of unknown length"""
 
-    _value: AsyncUnsizedAdapter
-
-    async def write(self, writer: AbstractStreamWriter) -> None:
-        chunk = await self._value.read(2**16)
-        while chunk:
-            await writer.write(chunk)
-            chunk = await self._value.read(2**16)
-
-
-class SyncIterablePayload(UnsizedPayload):
-    """Payload of async data of unknown length"""
-
-    _value: SyncIterableAdapter
-
-    async def write(self, writer: AbstractStreamWriter) -> None:
-        chunk = self._value.read()
-        while chunk:
-            await writer.write(chunk)
-            chunk = self._value.read()
-
-
-class AsyncIterablePayload(UnsizedPayload):
-    """Payload of async data of unknown length"""
-
-    _value: AsyncIterableAdapter
+    _value: StreamAdapter
 
     async def write(self, writer: AbstractStreamWriter) -> None:
         chunk = await self._value.read()
         while chunk:
+            if len(chunk) > TOO_LARGE_BYTES_BODY:
+                kwargs = {"source": self}
+                logger.warning(
+                    "Sending a large body directly with raw bytes might"
+                    " lock the event loop. You should probably pass an "
+                    "io.BytesIO object instead",
+                    ResourceWarning,
+                    **kwargs,
+                )
             await writer.write(chunk)
             chunk = await self._value.read()
 
 
-PAYLOAD_REGISTRY.register(SyncSizedPayload, SyncSizedAdapter)
-PAYLOAD_REGISTRY.register(AsyncSizedPayload, AsyncSizedAdapter)
-PAYLOAD_REGISTRY.register(SyncUnsizedPayload, SyncUnsizedAdapter)
-PAYLOAD_REGISTRY.register(AsyncUnsizedPayload, AsyncUnsizedAdapter)
-PAYLOAD_REGISTRY.register(SyncIterablePayload, SyncIterableAdapter)
-PAYLOAD_REGISTRY.register(AsyncIterablePayload, AsyncIterableAdapter)
+PAYLOAD_REGISTRY.register(
+    AsyncPayload, (SliceableAdapter, FilelikeObjectAdapter, IterableAdapter)
+)
