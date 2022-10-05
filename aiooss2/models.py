@@ -173,6 +173,6 @@ class AioGetObjectResult(HeadObjectResult):
             amt (int, optional): batch size of the data to read
 
         Returns:
-            Awaitable[bytes]:
+        Awaitable[bytes]:
         """
         return await self.stream.read(amt)
