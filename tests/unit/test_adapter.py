@@ -6,11 +6,11 @@ import inspect
 import io
 import os
 from typing import TYPE_CHECKING
+from unittest.mock import Mock
 
 import pytest
 from _collections_abc import list_iterator
 from aiohttp.streams import StreamReader
-from mock import mock
 
 from aiooss2.adapter import (
     FilelikeObjectAdapter,
@@ -57,7 +57,7 @@ def _iterator():
 
 def _mock_stream():
     """Mock a stream with data."""
-    protocol = mock.Mock(_reading_paused=False)
+    protocol = Mock(_reading_paused=False)
     stream = StreamReader(protocol, limit=2**16)
     stream.feed_data(b"data file object")
     stream.feed_eof()
