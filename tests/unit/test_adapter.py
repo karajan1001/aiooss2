@@ -21,6 +21,7 @@ from aiooss2.utils import make_adapter
 
 if TYPE_CHECKING:
     from oss2 import Bucket
+    from py.path import local
 
     from aiooss2.api import AioBucket
 
@@ -140,3 +141,17 @@ def test_make_adapter_error():
         assert make_adapter(
             ["data1", "data2", "data3"], discard=1, enable_crc=True
         )
+
+
+def test_adapter_read(
+    tmpdir: "local",
+):
+    data = b"123456789"
+    file = tmpdir / "file"
+    file.write(data)
+
+    with open(str(file), "rb") as f_r:
+        f_r.seek(3, os.SEEK_SET)
+        adaptor = FilelikeObjectAdapter(f_r, size=5)
+        result = asyncio.run(adaptor.read())
+        assert result == b"45678"

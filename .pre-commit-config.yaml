@@ -17,7 +17,7 @@ repos:
           - flake8-comprehensions
           - flake8-debugger
           - flake8-string-format
-    repo: https://gitlab.com/pycqa/flake8
+    repo: https://github.com/PyCQA/flake8
     rev: 5.0.4
   - repo: local
     hooks:

@@ -148,16 +148,26 @@ class FilelikeObjectAdapter(StreamAdapter):
             except AttributeError:
                 pass
 
+    def _length_to_read(self, amt: int) -> int:
+        if self.size is None:
+            return amt
+        length_to_read = self.size - self.offset
+        if amt > 0:
+            length_to_read = min(amt, length_to_read)
+        return length_to_read
+
     async def read(self, amt: int = -1) -> Awaitable[bytes]:
-        if self._read_all:
+        if self._read_all or (self.size and self.offset >= self.size):
             return b""
         if self.offset < self.discard and amt:
             amt += self.discard - self.offset
 
+        length_to_read = self._length_to_read(amt)
+
         if inspect.iscoroutinefunction(self.stream.read):
-            content = await self.stream.read(amt)
+            content = await self.stream.read(length_to_read)
         else:
-            content = self.stream.read(amt)
+            content = self.stream.read(length_to_read)
         if not content:
             self._read_all = True
         return self._invoke_callbacks(content)
