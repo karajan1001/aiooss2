@@ -1,5 +1,5 @@
 """
-Basic tests for aiooss2
+Basic tests for bucket operations.
 """
 # pylint: disable=missing-function-docstring
 import asyncio

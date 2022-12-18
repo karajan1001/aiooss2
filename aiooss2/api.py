@@ -28,8 +28,11 @@ from oss2.models import (
     BatchDeleteObjectsResult,
     GetBucketInfoResult,
     GetObjectMetaResult,
+    InitMultipartUploadResult,
     ListBucketsResult,
+    ListMultipartUploadsResult,
     ListObjectsResult,
+    ListPartsResult,
     PutObjectResult,
     RequestResult,
 )
@@ -51,6 +54,15 @@ from oss2.xml_utils import (
 from .exceptions import make_exception
 from .http import AioSession, Request
 from .models import AioGetObjectResult
+from .multipart import (
+    abort_multipart_upload,
+    complete_multipart_upload,
+    init_multipart_upload,
+    list_multipart_uploads,
+    list_parts,
+    upload_part,
+    upload_part_copy,
+)
 from .utils import copyfileobj_and_verify, make_adapter
 
 if TYPE_CHECKING:
@@ -240,12 +252,12 @@ class AioBucket(_AioBase):
             **kwargs,
         )
 
-    async def __do_object(
+    async def _do_object(
         self, method: str, key: Union[bytes, str], **kwargs
     ) -> "AioResponse":
         return await self._do(method, self.bucket_name, key, **kwargs)
 
-    async def __do_bucket(self, method: str, **kwargs) -> "AioResponse":
+    async def _do_bucket(self, method: str, **kwargs) -> "AioResponse":
         return await self._do(method, self.bucket_name, "", **kwargs)
 
     async def put_object(
@@ -280,7 +292,7 @@ class AioBucket(_AioBase):
             enable_crc=self.enable_crc,
         )
 
-        resp: "AioResponse" = await self.__do_object(
+        resp: "AioResponse" = await self._do_object(
             "PUT", key, data=data, headers=headers
         )
         logger.debug("Put object done")
@@ -331,7 +343,7 @@ class AioBucket(_AioBase):
         if process:
             params.update({Bucket.PROCESS: process})
 
-        resp = await self.__do_object(
+        resp = await self._do_object(
             "GET", key, headers=headers_dict, params=params
         )
         logger.debug("Get object done")
@@ -365,7 +377,7 @@ class AioBucket(_AioBase):
             RequestResult:
         """
 
-        resp = await self.__do_object(
+        resp = await self._do_object(
             "DELETE", key, params=params, headers=headers
         )
         logger.debug("Delete object done")
@@ -398,7 +410,7 @@ class AioBucket(_AioBase):
             ListObjectsResult:
         """
         headers = CaseInsensitiveDict(headers)
-        resp = await self.__do_object(
+        resp = await self._do_object(
             "GET",
             "",
             params={
@@ -444,7 +456,7 @@ class AioBucket(_AioBase):
         if Bucket.OBJECTMETA not in params:
             params[Bucket.OBJECTMETA] = ""
 
-        resp = await self.__do_object(
+        resp = await self._do_object(
             "GET", key, params=params, headers=headers
         )
         logger.debug("Get object metadata done")
@@ -488,7 +500,7 @@ class AioBucket(_AioBase):
         Returns:
             GetBucketInfoResult
         """
-        resp = await self.__do_bucket("GET", params={Bucket.BUCKET_INFO: ""})
+        resp = await self._do_bucket("GET", params={Bucket.BUCKET_INFO: ""})
         logger.debug("Get bucket info done")
         return await self._parse_result(
             resp, parse_get_bucket_info, GetBucketInfoResult
@@ -534,7 +546,7 @@ class AioBucket(_AioBase):
             enable_crc=self.enable_crc,
         )
 
-        resp = await self.__do_object(
+        resp = await self._do_object(
             "POST",
             key,
             data=data,
@@ -694,7 +706,7 @@ class AioBucket(_AioBase):
         headers = CaseInsensitiveDict(headers)
         headers["Content-MD5"] = content_md5(data)
 
-        resp = await self.__do_object(
+        resp = await self._do_object(
             "POST",
             "",
             data=data,
@@ -753,9 +765,53 @@ class AioBucket(_AioBase):
                 "/" + source_bucket_name + "/" + urlquote(source_key, "")
             )
 
-        resp = await self.__do_object("PUT", target_key, headers=headers)
+        resp = await self._do_object("PUT", target_key, headers=headers)
 
         return PutObjectResult(resp)
+
+    async def abort_multipart_upload(
+        self: "AioBucket", *args, **kwargs
+    ) -> RequestResult:
+        """abort multipart uploading process"""
+        return await abort_multipart_upload(self, *args, **kwargs)
+
+    async def complete_multipart_upload(
+        self: "AioBucket", *args, **kwargs
+    ) -> PutObjectResult:
+        """Complete multipart uploading process create a new file."""
+        return await complete_multipart_upload(self, *args, **kwargs)
+
+    async def init_multipart_upload(
+        self: "AioBucket", *args, **kwargs
+    ) -> InitMultipartUploadResult:
+        """initialize multipart uploading
+        The returning upload id, bucket name and object name together
+        defines this uploading event."""
+        return await init_multipart_upload(self, *args, **kwargs)
+
+    async def list_multipart_uploads(
+        self: "AioBucket", *args, **kwargs
+    ) -> ListMultipartUploadsResult:
+        """List multipart uploading process"""
+        return await list_multipart_uploads(self, *args, **kwargs)
+
+    async def list_parts(
+        self: "AioBucket", *args, **kwargs
+    ) -> ListPartsResult:
+        """list uploaded parts in a part uploading progress."""
+        return await list_parts(self, *args, **kwargs)
+
+    async def upload_part(
+        self: "AioBucket", *args, **kwargs
+    ) -> PutObjectResult:
+        """upload single part."""
+        return await upload_part(self, *args, **kwargs)
+
+    async def upload_part_copy(
+        self: "AioBucket", *args, **kwargs
+    ) -> PutObjectResult:
+        """copy part or whole of a source file to a slice of a target file."""
+        return await upload_part_copy(self, *args, **kwargs)
 
 
 # pylint: disable=too-few-public-methods
