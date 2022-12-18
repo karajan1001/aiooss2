@@ -45,7 +45,7 @@ def bucket_name():
 @pytest.fixture(scope="session")
 def test_directory():
     test_id = uuid.uuid4()
-    return f"ossfs_test/{test_id}"
+    return f"aiooss2_test/{test_id}"
 
 
 @pytest.fixture(scope="session")
