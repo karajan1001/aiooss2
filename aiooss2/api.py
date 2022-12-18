@@ -28,6 +28,7 @@ from oss2.models import (
     BatchDeleteObjectsResult,
     GetBucketInfoResult,
     GetObjectMetaResult,
+    HeadObjectResult,
     InitMultipartUploadResult,
     ListBucketsResult,
     ListMultipartUploadsResult,
@@ -45,6 +46,7 @@ from oss2.utils import (
 )
 from oss2.xml_utils import (
     parse_batch_delete_objects,
+    parse_dummy_result,
     parse_get_bucket_info,
     parse_list_buckets,
     parse_list_objects,
@@ -768,6 +770,51 @@ class AioBucket(_AioBase):
         resp = await self._do_object("PUT", target_key, headers=headers)
 
         return PutObjectResult(resp)
+
+    async def head_object(
+        self,
+        key: str,
+        headers: Optional[Union[Dict, CaseInsensitiveDict]] = None,
+        params: Optional[Dict] = None,
+    ) -> "HeadObjectResult":
+        """Get object metadata
+
+            >>> result = bucket.head_object('readme.txt')
+            >>> print(result.content_type)
+            text/plain
+
+        Args:
+            key (str): object key
+            headers (Optional[Union[Dict, CaseInsensitiveDict]], optional):
+                HTTP headers to specify.
+            params (Optional[Dict], optional):
+
+        Returns:
+            HeadObjectResult:
+
+        Raises:
+            `NotFound <oss2.exceptions.NotFound>` if object does not exist.
+        """
+
+        logger.debug(
+            "Start to head object, bucket: %s, key: %s, headers: %s",
+            self.bucket_name,
+            to_string(key),
+            headers,
+        )
+
+        resp = await self._do_object(
+            "HEAD", key, headers=headers, params=params
+        )
+
+        logger.debug(
+            "Head object done, req_id: %s, status_code: %s",
+            resp.request_id,
+            resp.status,
+        )
+        return await self._parse_result(
+            resp, parse_dummy_result, HeadObjectResult
+        )
 
     async def abort_multipart_upload(
         self: "AioBucket", *args, **kwargs

@@ -269,3 +269,17 @@ def test_put_object_from_middle_of_file(
         oss2_bucket.get_object(object_name).read()
         == data.strip() + os.linesep.encode()
     )
+
+
+def test_head_object(bucket: "AioBucket", oss2_bucket: "Bucket", number_file):
+    async def head_object(object_name):
+        async with bucket as aiobucket:
+            return await aiobucket.head_object(object_name)
+
+    result = asyncio.run(head_object(number_file))
+    expected = oss2_bucket.head_object(number_file)
+    assert expected.content_length == result.content_length
+    assert expected.object_type == result.object_type
+    assert expected.content_type == result.content_type
+    assert expected.last_modified == result.last_modified
+    assert expected.etag == result.etag
