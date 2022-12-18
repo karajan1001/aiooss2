@@ -16,33 +16,50 @@ from typing import (
 
 from oss2 import Bucket, CryptoBucket
 from oss2.compat import to_string, to_unicode
+from oss2.defaults import multiget_threshold as MULTIGET_THRESHOLD
 from oss2.defaults import multipart_num_threads as MULTIPART_NUM_THREADS
 from oss2.defaults import multipart_threshold as MULTIPART_THRESHOLD
 from oss2.defaults import part_size as PART_SIZE
 from oss2.exceptions import InconsistentError
 from oss2.headers import (
+    IF_MATCH,
+    IF_UNMODIFIED_SINCE,
     OSS_OBJECT_ACL,
     OSS_REQUEST_PAYER,
     OSS_SERVER_SIDE_DATA_ENCRYPTION,
     OSS_SERVER_SIDE_ENCRYPTION,
     OSS_TRAFFIC_LIMIT,
 )
-from oss2.models import ContentCryptoMaterial, MultipartUploadCryptoContext
-from oss2.resumable import (
+from oss2.http import CaseInsensitiveDict
+from oss2.models import (
+    ContentCryptoMaterial,
+    MultipartUploadCryptoContext,
     PartInfo,
+)
+from oss2.resumable import (
     ResumableStore,
     _filter_invalid_headers,
+    _ObjectInfo,
     _PartToProcess,
     _populate_valid_headers,
     _populate_valid_params,
+    _ResumableDownloader,
     _ResumableUploader,
     determine_part_size,
 )
-from oss2.utils import b64decode_from_string, b64encode_as_string
+from oss2.utils import (
+    b64decode_from_string,
+    b64encode_as_string,
+    calc_obj_crc_from_parts,
+    check_crc,
+    force_rename,
+    http_date,
+)
 
 from aiooss2.adapter import FilelikeObjectAdapter
 from aiooss2.exceptions import InvalidEncryptionRequest
 from aiooss2.iterators import AioPartIterator
+from aiooss2.utils import copyfileobj_and_verify
 
 if TYPE_CHECKING:
     from oss2.models import PutObjectResult
@@ -144,6 +161,96 @@ async def resumable_upload(  # pylint: disable=too-many-arguments
     return result
 
 
+async def resumable_download(  # pylint: disable=too-many-arguments
+    bucket: Union["AioBucket", "CryptoBucket"],
+    key: Union[str, bytes],
+    filename: Union[str, bytes],
+    store: Optional["ResumableStore"] = None,
+    headers: Optional[Mapping] = None,
+    part_size: Optional[int] = None,
+    progress_callback: Optional[Callable] = None,
+    num_threads: Optional[int] = None,
+    params: Optional[Mapping] = None,
+    multiget_threshold: Optional[int] = None,
+) -> None:
+    """Resumable download object to local file, implementation method is to
+    create a list temproary files whose name is formed by the original
+    filename with some random surfix. If the downloading was interrupted by
+    some reasons, only those remaied parts need to be downloaded.
+
+    # Using `CryptoBucket` will make the download fallback to the normal one.
+    # Avoid using multi-threading/processing as the temp downloaded file might
+    # be covered.
+
+    Args:
+        bucket (Union[AioBucket, CryptoBucket]): bucket object to download
+        key (Union[str, bytes]): object key to store the file
+        filename (Union[str, bytes]): filename to download
+        store (Optional["ResumableStore"]): ResumableStore object to keep the
+            downloading info in the previous operation.
+        headers (Optional[Mapping]): HTTP headers to send. Defaults to None.
+            # download_part only accept OSS_REQUEST_PAYER
+            # get_object and get_object_to_file only accept OSS_REQUEST_PAYER,
+                OSS_TRAFFIC_LIMIT
+        multipget_threshold (Optional[int]): threshold to use multipart
+            download instead of a normal one.
+        part_size (Optional[int]): partion size of the multipart.
+        progress_callback (Optional[Callable]): callback function for
+            progress bar.
+        num_threads (Optional[int]): concurrency number during the uploadinging
+        params (Optional[Mapping]):
+
+    Return:
+        None:
+    """
+    key_str = to_string(key)
+    filename_str = to_unicode(filename)
+
+    logger.debug(
+        "Start to resumable download, bucket: %s, key: %s, filename: %s, "
+        "multiget_threshold: %s, part_size: %s, num_threads: %s",
+        bucket.bucket_name,
+        key_str,
+        filename_str,
+        multiget_threshold,
+        part_size,
+        num_threads,
+    )
+    multiget_threshold = multiget_threshold or MULTIGET_THRESHOLD
+
+    valid_headers = _populate_valid_headers(
+        headers, [OSS_REQUEST_PAYER, OSS_TRAFFIC_LIMIT]
+    )
+    result = await bucket.head_object(
+        key, params=params, headers=valid_headers
+    )
+    logger.debug(
+        "The size of object to download is: %s", result.content_length
+    )
+    if result.content_length >= multiget_threshold:
+        downloader = ResumableDownloader(
+            bucket,
+            key,
+            filename,
+            _ObjectInfo.make(result),
+            part_size=part_size,
+            progress_callback=progress_callback,
+            num_threads=num_threads,
+            store=store,
+            params=params,
+            headers=valid_headers,
+        )
+        await downloader.download(result.server_crc)
+    else:
+        await bucket.get_object_to_file(
+            key,
+            filename,
+            progress_callback=progress_callback,
+            params=params,
+            headers=valid_headers,
+        )
+
+
 class ResumableUploader(_ResumableUploader):
     """Resumable Uploader"""
 
@@ -155,7 +262,7 @@ class ResumableUploader(_ResumableUploader):
         """resumable upload file to oss storage
 
         Returns:
-            _type_: _description_
+            PutObjectResult:
         """
         await self._load_record()
 
@@ -384,3 +491,87 @@ class ResumableUploader(_ResumableUploader):
 
         self.__finished_parts = await self._get_finished_parts()
         self.__finished_size = sum(p.size for p in self.__finished_parts)
+
+
+# pylint: disable=too-few-public-methods
+class ResumableDownloader(_ResumableDownloader):
+    """Resumable Downloader"""
+
+    bucket: "AioBucket"
+
+    async def download(  # pylint: disable=invalid-overridden-method
+        self, server_crc=None
+    ):
+        """Resumable download object from oss server to a local file.
+
+        Args:
+            server_crc (_type_, optional): _description_. Defaults to None.
+        """
+        self.__load_record()
+
+        parts_to_download = self.__get_parts_to_download()
+        logger.debug("Parts need to download: %s", parts_to_download)
+
+        with open(self.__tmp_file, "ab"):
+            pass
+
+        sem = asyncio.Semaphore(self.__num_threads)
+        tasks = [
+            asyncio.ensure_future(self._download_task(sem, part_to_download))
+            for part_to_download in parts_to_download
+        ]
+        await asyncio.gather(*tasks)
+
+        if self.bucket.enable_crc:
+            parts = sorted(self.__finished_parts, key=lambda p: p.part_number)
+            object_crc = calc_obj_crc_from_parts(parts)
+            check_crc("resume download", object_crc, server_crc, None)
+
+        force_rename(self.__tmp_file, self.filename)
+
+        self._report_progress(self.size)
+        self._del_record()
+
+    async def _download_task(
+        self, sem: "asyncio.Semaphore", part_to_upload: _PartToProcess
+    ):
+        async with sem:
+            return await self._download_part(part_to_upload)
+
+    async def _download_part(self, part: _PartToProcess):
+        self._report_progress(self.__finished_size)
+
+        with open(self.__tmp_file, "rb+") as f_r:
+            f_r.seek(part.start, os.SEEK_SET)
+
+            headers = _populate_valid_headers(
+                self.__headers, [OSS_REQUEST_PAYER, OSS_TRAFFIC_LIMIT]
+            )
+            if headers is None:
+                headers = CaseInsensitiveDict()
+            headers[IF_MATCH] = self.objectInfo.etag
+            headers[IF_UNMODIFIED_SINCE] = http_date(self.objectInfo.mtime)
+
+            result = await self.bucket.get_object(
+                self.key,
+                byte_range=(part.start, part.end - 1),
+                headers=headers,
+                params=self.__params,
+            )
+            await copyfileobj_and_verify(
+                result,
+                f_r,
+                part.end - part.start,
+                request_id=result.request_id,
+            )
+
+        part.part_crc = result.client_crc
+        logger.debug(
+            "down part success, add part info to record, part_number:"
+            " %s, start: %s, end: %s",
+            part.part_number,
+            part.start,
+            part.end,
+        )
+
+        self.__finish_part(part)

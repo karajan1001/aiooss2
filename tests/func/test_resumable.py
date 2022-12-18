@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from aiooss2.resumable import resumable_upload
+from aiooss2.resumable import resumable_download, resumable_upload
 
 if TYPE_CHECKING:
     from oss2 import Bucket
@@ -48,7 +48,7 @@ def test_resumable_upload_file(
                 aiobucket,
                 object_name,
                 file,
-                multipart_threshold=10,
+                multipart_threshold=10 * 2**10,
                 part_size=100 * 2**10,
             )
 
@@ -57,3 +57,34 @@ def test_resumable_upload_file(
     assert result.resp.status == 200
     oss2_bucket.get_object_to_file(object_name, file_w)
     assert oss2_bucket.get_object(object_name).read() == data
+
+
+@pytest.mark.parametrize("enable_crc", [True, False])
+@pytest.mark.parametrize("size", [100, 2**20])
+def test_resumable_download_file(
+    tmpdir: "local",
+    bucket: "AioBucket",
+    oss2_bucket: "Bucket",
+    test_path,
+    enable_crc: bool,
+    size: int,
+):
+    data = os.urandom(size)
+    function_name = inspect.stack()[0][0].f_code.co_name
+    object_name = f"{test_path}/{function_name}"
+    oss2_bucket.put_object(object_name, data)
+    file = tmpdir / "file"
+
+    async def resumalbe_download_coroutine(object_name, file):
+        async with bucket as aiobucket:
+            return await resumable_download(
+                aiobucket,
+                object_name,
+                file,
+                multiget_threshold=10,
+                part_size=100 * 2**10,
+            )
+
+    bucket.enable_crc = enable_crc
+    asyncio.run(resumalbe_download_coroutine(object_name, str(file)))
+    assert file.read_binary() == data
