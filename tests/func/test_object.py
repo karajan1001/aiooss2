@@ -1,5 +1,5 @@
 """
-Basic tests for aiooss2
+Functional tests for object operations.
 """
 # pylint: disable=missing-function-docstring
 import asyncio
@@ -40,7 +40,6 @@ def test_put_object(
 
     bucket.enable_crc = enable_crc
     result = asyncio.run(put(object_name, data))
-    bucket.enable_crc = not enable_crc
     assert result.resp.status == 200
     assert oss2_bucket.get_object(object_name).read() == data
 
@@ -55,7 +54,6 @@ def test_get_object(bucket: "AioBucket", number_file, enable_crc: bool):
 
     bucket.enable_crc = enable_crc
     result = asyncio.run(get(number_file))
-    bucket.enable_crc = not enable_crc
     assert result == NUMBERS
 
 
@@ -181,7 +179,6 @@ def test_put_object_from_file(
 
     bucket.enable_crc = enable_crc
     result = asyncio.run(put_object_from_file(object_name, str(file)))
-    bucket.enable_crc = not enable_crc
     assert result.resp.status == 200
     assert oss2_bucket.get_object(object_name).read() == data
 
@@ -200,7 +197,6 @@ def test_get_object_to_file(
 
     bucket.enable_crc = enable_crc
     asyncio.run(get_object_to_file(number_file, str(file)))
-    bucket.enable_crc = not enable_crc
     assert file.read_binary() == NUMBERS
 
 
