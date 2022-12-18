@@ -3,7 +3,7 @@ Contains some useful iteraotrs, can be used to iterate buckets、
 files or file parts etc.
 """
 # pylint: disable=too-many-arguments
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 from oss2 import defaults, http
 from oss2.models import ListObjectsResult, SimplifiedObjectInfo
@@ -11,11 +11,14 @@ from oss2.models import ListObjectsResult, SimplifiedObjectInfo
 from .exceptions import ServerError
 
 if TYPE_CHECKING:
+    from oss2.models import SimplifiedBucketInfo
+    from oss2.resumable import PartInfo
+
     from .api import AioBucket, AioService
 
 
 class _AioBaseIterator:
-    def __init__(self, marker: str, max_retries: Optional[str]):
+    def __init__(self, marker: str, max_retries: Optional[int]):
         self.is_truncated = True
         self.next_marker = marker
 
@@ -105,7 +108,7 @@ class AioObjectIterator(_AioBaseIterator):
             max_keys=self.max_keys,
             headers=self.headers,
         )
-        self.entries = result.object_list + [
+        self.entries: List["SimplifiedObjectInfo"] = result.object_list + [
             SimplifiedObjectInfo(prefix, None, None, None, None, None)
             for prefix in result.prefix_list
         ]
@@ -145,6 +148,51 @@ class AioBucketIterator(_AioBaseIterator):
         result = await self.service.list_buckets(
             prefix=self.prefix, marker=self.next_marker, max_keys=self.max_keys
         )
-        self.entries = result.buckets
+        self.entries: List["SimplifiedBucketInfo"] = result.buckets
+
+        return result.is_truncated, result.next_marker
+
+
+class AioPartIterator(_AioBaseIterator):
+    """Iterator over all parts from a partial upload session"""
+
+    def __init__(
+        self,
+        bucket: "AioBucket",
+        key: str,
+        upload_id: str,
+        marker: str = "0",
+        max_parts: int = 1000,
+        max_retries: Optional[int] = None,
+        headers: Optional[Dict] = None,
+    ):
+        """
+
+        Args:
+            bucket (AioBucket): bucket to operate.
+            key (str): key of the object.
+            upload_id (str): upload id of the partial upload session.
+            marker (str, optional): paginate separator.
+            max_parts (int, optional): key number returns from `list_parts`
+            max_retries (Optional[int], optional): max retry count.
+            headers (Optional[Dict], optional): HTTP header.
+        """
+        super().__init__(marker, max_retries)
+
+        self.bucket = bucket
+        self.key = key
+        self.upload_id = upload_id
+        self.max_parts = max_parts
+        self.headers = http.CaseInsensitiveDict(headers)
+
+    async def _fetch(self):
+        result = await self.bucket.list_parts(
+            self.key,
+            self.upload_id,
+            marker=self.next_marker,
+            max_parts=self.max_parts,
+            headers=self.headers,
+        )
+        self.entries: List["PartInfo"] = result.parts
 
         return result.is_truncated, result.next_marker
