@@ -3,7 +3,7 @@ Module for all input and output classes for the Python SDK API
 """
 import copy
 import logging
-from typing import TYPE_CHECKING, Awaitable
+from typing import TYPE_CHECKING
 
 from oss2.exceptions import ClientError
 from oss2.headers import (
@@ -166,7 +166,7 @@ class AioGetObjectResult(HeadObjectResult):
             return self.stream.crc
         return None
 
-    async def read(self, amt: int = -1) -> Awaitable[bytes]:
+    async def read(self, amt: int = -1) -> bytes:
         """async read data from stream
 
         Args:

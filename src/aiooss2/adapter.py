@@ -6,7 +6,7 @@ import inspect
 import logging
 import os
 from abc import ABC, abstractmethod
-from typing import IO, AsyncIterator, Awaitable, Callable, Optional, Union
+from typing import IO, AsyncIterator, Callable, Optional, Union
 
 from aiohttp.abc import AbstractStreamWriter
 from aiohttp.payload import PAYLOAD_REGISTRY, TOO_LARGE_BYTES_BODY, Payload
@@ -57,17 +57,17 @@ class StreamAdapter(ABC):
     def __aiter__(self) -> AsyncIterator:
         return self
 
-    async def __anext__(self) -> Awaitable[bytes]:
+    async def __anext__(self) -> bytes:
         content = await self.read(_CHUNK_SIZE)
         if content:
             return content
         raise StopAsyncIteration
 
-    def __len__(self) -> int:
+    def __len__(self) -> Optional[int]:
         return self.size
 
     @abstractmethod
-    async def read(self, amt=-1) -> Awaitable[bytes]:
+    async def read(self, amt=-1) -> bytes:
         """async api to read a chunk from the data
 
         Args:
@@ -117,7 +117,7 @@ class SliceableAdapter(StreamAdapter):
                 size of the data stream.
         """
         super().__init__(stream, **kwargs)
-        self.size = self.size or len(stream)
+        self.size: int = self.size or len(stream)
 
     def _length_to_read(self, amt: int) -> int:
         length_to_read = self.size - self.offset
@@ -125,7 +125,7 @@ class SliceableAdapter(StreamAdapter):
             length_to_read = min(amt, length_to_read)
         return length_to_read
 
-    async def read(self, amt: int = -1) -> Awaitable[bytes]:
+    async def read(self, amt: int = -1) -> bytes:
         if self.offset >= self.size:
             return b""
         length_to_read = self._length_to_read(amt)
@@ -156,7 +156,7 @@ class FilelikeObjectAdapter(StreamAdapter):
             length_to_read = min(amt, length_to_read)
         return length_to_read
 
-    async def read(self, amt: int = -1) -> Awaitable[bytes]:
+    async def read(self, amt: int = -1) -> bytes:
         if self._read_all or (self.size and self.offset >= self.size):
             return b""
         if self.offset < self.discard and amt:
@@ -188,7 +188,7 @@ class IterableAdapter(StreamAdapter):
                 f"Iterable input {self.stream}"
             )
 
-    async def read(self, amt: int = -1) -> Awaitable[bytes]:
+    async def read(self, amt: int = -1) -> bytes:
         try:
             if hasattr(self.stream, "__anext__"):
                 content = await self.stream.__anext__()
@@ -213,13 +213,10 @@ class AsyncPayload(Payload):
         chunk = await self._value.read()
         while chunk:
             if len(chunk) > TOO_LARGE_BYTES_BODY:
-                kwargs = {"source": self}
                 logger.warning(
                     "Sending a large body directly with raw bytes might"
                     " lock the event loop. You should probably pass an "
-                    "io.BytesIO object instead",
-                    ResourceWarning,
-                    **kwargs,
+                    "io.BytesIO object instead.",
                 )
             await writer.write(chunk)
             chunk = await self._value.read()

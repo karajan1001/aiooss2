@@ -1,5 +1,4 @@
 """Automation using nox."""
-# pylint: disable=missing-function-docstring
 import glob
 import os
 
@@ -10,13 +9,23 @@ nox.options.sessions = "lint", "tests"
 locations = "src", "tests"
 
 
-@nox.session(python=["3.7", "3.8", "3.9", "3.10", "pypy-3.8", "pypy-3.9"])
+@nox.session
+def docs(session: nox.Session) -> None:
+    session.install(".[docs]")
+    session.run("mkdocs", "build")
+
+
+@nox.session(python=["3.8", "3.9", "3.10", "3.11", "pypy3.8", "pypy3.9"])
 def tests(session: nox.Session) -> None:
     session.install(".[tests]")
     session.run(
         "pytest",
-        "tests",
+        "--cov",
+        "--cov-config=pyproject.toml",
+        "--durations",
+        "100",
         *session.posargs,
+        env={"COVERAGE_FILE": f".coverage.{session.python}"},
     )
 
 
@@ -27,12 +36,14 @@ def lint(session: nox.Session) -> None:
 
     args = *(session.posargs or ("--show-diff-on-failure",)), "--all-files"
     session.run("pre-commit", "run", *args)
+    session.run("python", "-m", "mypy")
+    session.run("python", "-m", "pylint", *locations)
 
 
 @nox.session
 def safety(session: nox.Session) -> None:
     """Scan dependencies for insecure packages."""
-    session.install(".")
+    session.install(".[dev]")
     session.install("safety")
     session.run("safety", "check", "--full-report")
 

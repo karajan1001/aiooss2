@@ -82,7 +82,7 @@ async def resumable_upload(  # pylint: disable=too-many-arguments
     num_threads: Optional[int] = None,
     params: Optional[Mapping] = None,
 ) -> "PutObjectResult":
-    """Resumable upload local file , The implementation is spliting local
+    """Resumable upload local file , The implementation is splitting local
     files to multipart, storing uploading information in local files. If the
     uploading was interrupted by some reasons, only those remaied parts need
     to be uploaded.
@@ -103,7 +103,7 @@ async def resumable_upload(  # pylint: disable=too-many-arguments
                 OSS_OBJECT_ACL
         multipart_threshold (Optional[int]): threshold to use multipart upload
             instead of a normal one. Defaults to None.
-        part_size (Optional[int]): partion size of the multipart.
+        part_size (Optional[int]): partition size of the multipart.
             Defaults to None.
         progress_callback (Optional[Callable]): callback function for
             progress bar. Defaults to None.
@@ -174,7 +174,7 @@ async def resumable_download(  # pylint: disable=too-many-arguments
     multiget_threshold: Optional[int] = None,
 ) -> None:
     """Resumable download object to local file, implementation method is to
-    create a list temproary files whose name is formed by the original
+    create a list temporary files whose name is formed by the original
     filename with some random surfix. If the downloading was interrupted by
     some reasons, only those remaied parts need to be downloaded.
 
@@ -194,7 +194,7 @@ async def resumable_download(  # pylint: disable=too-many-arguments
                 OSS_TRAFFIC_LIMIT
         multipget_threshold (Optional[int]): threshold to use multipart
             download instead of a normal one.
-        part_size (Optional[int]): partion size of the multipart.
+        part_size (Optional[int]): partition size of the multipart.
         progress_callback (Optional[Callable]): callback function for
             progress bar.
         num_threads (Optional[int]): concurrency number during the uploadinging
@@ -203,8 +203,8 @@ async def resumable_download(  # pylint: disable=too-many-arguments
     Return:
         None:
     """
-    key_str = to_string(key)
-    filename_str = to_unicode(filename)
+    key_str: str = to_string(key)
+    filename_str: str = to_unicode(filename)
 
     logger.debug(
         "Start to resumable download, bucket: %s, key: %s, filename: %s, "
@@ -222,7 +222,7 @@ async def resumable_download(  # pylint: disable=too-many-arguments
         headers, [OSS_REQUEST_PAYER, OSS_TRAFFIC_LIMIT]
     )
     result = await bucket.head_object(
-        key, params=params, headers=valid_headers
+        key_str, params=params, headers=valid_headers
     )
     logger.debug(
         "The size of object to download is: %s", result.content_length
@@ -243,8 +243,8 @@ async def resumable_download(  # pylint: disable=too-many-arguments
         await downloader.download(result.server_crc)
     else:
         await bucket.get_object_to_file(
-            key,
-            filename,
+            key_str,
+            filename_str,
             progress_callback=progress_callback,
             params=params,
             headers=valid_headers,

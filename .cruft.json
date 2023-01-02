@@ -1,0 +1,23 @@
+{
+  "template": "https://github.com/iterative/py-template",
+  "commit": "75abeda8b405100ca48820bb33191a85de9f446f",
+  "checkout": null,
+  "context": {
+    "cookiecutter": {
+      "project_name": "aiooss2",
+      "package_name": "aiooss2",
+      "friendly_name": "Aiooss2",
+      "author": "Yanxiang Gao",
+      "email": "mishanyo1001@gmail.com",
+      "github_user": "karajan1001",
+      "version": "0.2.3",
+      "copyright_year": "2023",
+      "license": "Apache-2.0",
+      "docs": "True",
+      "short_description": "Async client for aliyun OSS(Object Storage Service) using oss2 and aiohttp_/asyncio_",
+      "development_status": "Development Status :: 3 - Alpha",
+      "_template": "https://github.com/iterative/py-template"
+    }
+  },
+  "directory": null
+}

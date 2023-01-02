@@ -1,0 +1,33 @@
+site_name: Aiooss2
+
+theme:
+  name: material
+  logo: assets/logo.svg
+  favicon: assets/logo.svg
+  palette:
+    primary: white
+    accent: deep purple
+  icon:
+    repo: fontawesome/brands/github
+
+repo_url: https://github.com/iterative/aiooss2
+repo_name: iterative/aiooss2
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/iterative/
+
+plugins:
+- search
+- gen-files:
+    scripts:
+    - docs/gen_ref_pages.py
+- section-index
+- mkdocstrings:
+    handlers:
+      python:
+        rendering:
+          show_submodules: no
+    watch:
+    - src/aiooss2
