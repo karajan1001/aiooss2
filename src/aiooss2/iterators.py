@@ -25,7 +25,7 @@ class _AioBaseIterator:
         max_retries = max_retries or defaults.request_retries
         self.max_retries = max_retries if max_retries > 0 else 1
 
-        self.entries = []
+        self.entries: List = []
 
     async def _fetch(self):
         raise NotImplementedError

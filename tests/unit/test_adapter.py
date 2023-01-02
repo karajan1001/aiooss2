@@ -5,11 +5,10 @@ import asyncio
 import inspect
 import io
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Iterable
 from unittest.mock import Mock
 
 import pytest
-from _collections_abc import list_iterator
 from aiohttp.streams import StreamReader
 
 from aiooss2.adapter import (
@@ -115,7 +114,7 @@ def test_make_adapter(
     if callable(datastream):
         datastream = datastream()
 
-    if not enable_crc and isinstance(datastream, list_iterator):
+    if not enable_crc and isinstance(datastream, Iterable):
         pytest.skip("invalid combination")
 
     function_name = inspect.stack()[0][0].f_code.co_name

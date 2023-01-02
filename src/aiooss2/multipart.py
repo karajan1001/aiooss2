@@ -16,8 +16,9 @@ from typing import (
     Union,
 )
 
-from oss2.api import _make_range_string
-from oss2.headers import OSS_COPY_OBJECT_SOURCE_RANGE
+from oss2.api import Bucket, _make_range_string
+from oss2.compat import urlquote
+from oss2.headers import OSS_COPY_OBJECT_SOURCE, OSS_COPY_OBJECT_SOURCE_RANGE
 from oss2.http import CaseInsensitiveDict
 from oss2.models import (
     InitMultipartUploadResult,
@@ -155,11 +156,8 @@ async def complete_multipart_upload(
 
     headers = CaseInsensitiveDict(headers)
 
-    if parts is not None:
-        parts = sorted(parts, key=lambda p: p.part_number)
-        data = to_complete_upload_request(parts)
-    else:
-        data = None
+    parts = sorted(parts, key=lambda p: p.part_number)
+    data = to_complete_upload_request(parts)
 
     logger.debug("Start to complete multipart upload")
 
@@ -229,7 +227,7 @@ async def list_multipart_uploads(
         key_marker (str, optional): Filename for paging. Do not required
         in the first call of this function. Set to `next_key_marker`
         from result in the following calls.
-        upload_id_marker (str, optional): paging seperator, Do not required
+        upload_id_marker (str, optional): paging separator, Do not required
         in the first call of this function. Set to `next_upload_id_marker`
         from result in the following calls.
         max_uploads (int, optional): max return numbers per page.
@@ -292,10 +290,23 @@ async def upload_part_copy(
     Returns:
         PutObjectResult:
     """
+    headers = CaseInsensitiveDict(headers)
 
-    headers = self._make_copy_source_headers(
-        source_bucket_name, source_key, headers, params
-    )
+    parameters: Dict[str, Any] = params or {}
+
+    if Bucket.VERSIONID in parameters:
+        headers[OSS_COPY_OBJECT_SOURCE] = (
+            "/"
+            + source_bucket_name
+            + "/"
+            + urlquote(source_key, "")
+            + "?versionId="
+            + parameters[Bucket.VERSIONID]
+        )
+    else:
+        headers[OSS_COPY_OBJECT_SOURCE] = (
+            "/" + source_bucket_name + "/" + urlquote(source_key, "")
+        )
 
     range_string = _make_range_string(byte_range)
     if range_string:
@@ -303,13 +314,11 @@ async def upload_part_copy(
 
     logger.debug("Start to upload part copy")
 
-    params = {} or params
-
-    params["uploadId"] = target_upload_id
-    params["partNumber"] = str(target_part_number)
+    parameters["uploadId"] = target_upload_id
+    parameters["partNumber"] = str(target_part_number)
 
     resp = await self._do_object(
-        "PUT", target_key, params=params, headers=headers
+        "PUT", target_key, params=parameters, headers=headers
     )
     logger.debug("Upload part copy done")
 

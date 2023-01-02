@@ -5,12 +5,12 @@ Module for Bucket and Service
 # pylint: disable=too-many-instance-attributes
 
 import logging
-import shutil
 from typing import (
     TYPE_CHECKING,
     Callable,
     Dict,
     List,
+    Mapping,
     Optional,
     Sequence,
     Type,
@@ -65,7 +65,7 @@ from .multipart import (
     upload_part,
     upload_part_copy,
 )
-from .utils import copyfileobj_and_verify, make_adapter
+from .utils import copyfileobj, copyfileobj_and_verify, make_adapter
 
 if TYPE_CHECKING:
     from oss2 import AnonymousAuth, Auth, StsAuth
@@ -91,7 +91,7 @@ class _AioBase:  # pylint: disable=too-few-public-methods
 
         Args:
             auth (Union[Auth, AnonymousAuth, StsAuth]): Auth class.
-            endpoint (str): enpoint address or CNAME.
+            endpoint (str): endpoint address or CNAME.
             is_cname (bool): Whether the endpoint is a CNAME.
             session (Optional[AioSession], optional): reuse a custom session.
             connect_timeout (int): connection.
@@ -148,7 +148,7 @@ class _AioBase:  # pylint: disable=too-few-public-methods
         )
 
         logger.debug(
-            "Responsed from the server, req_id: %s, status_code: %d",
+            "Responses from the server, req_id: %s, status_code: %d",
             resp.request_id,
             resp.status,
         )
@@ -210,7 +210,7 @@ class _AioBase:  # pylint: disable=too-few-public-methods
 
 
 class AioBucket(_AioBase):
-    """Used for Bucket and Object opertions, creating、deleting Bucket,
+    """Used for Bucket and Object operations, creating、deleting Bucket,
     uploading、downloading Object, etc。
     use case (bucket in HangZhou area)::
 
@@ -266,7 +266,7 @@ class AioBucket(_AioBase):
         self,
         key: str,
         data,
-        headers: Optional[Dict] = None,
+        headers: Optional[Mapping] = None,
         progress_callback: Optional[Callable] = None,
     ) -> "PutObjectResult":
         """upload some contents to an object
@@ -279,7 +279,7 @@ class AioBucket(_AioBase):
         Args:
             key (str): object name to upload
             data (Union[str, bytes, IO, Iterable]): contents to upload
-            headers (Optional[Dict], optional): HTTP headers to specify.
+            headers (Optional[Mapping], optional): HTTP headers to specify.
             progress_callback (Optional[Callable], optional): callback function
                 for progress bar.
 
@@ -312,7 +312,7 @@ class AioBucket(_AioBase):
         headers: Optional[dict] = None,
         progress_callback: Optional[Callable] = None,
         process=None,
-        params: Optional[Dict] = None,
+        params: Optional[Union[Dict, CaseInsensitiveDict]] = None,
     ) -> AioGetObjectResult:
         """download the contents of an object
 
@@ -329,7 +329,7 @@ class AioBucket(_AioBase):
             progress_callback (Optional[Callable], optional): callback function
                 for progress bar.
             process (_type_, optional): oss file process method.
-            params (Optional[Dict], optional):
+            params (Optional[Union[Dict, CaseInsensitiveDict]], optional):
 
         Returns:
             AioGetObjectResult:
@@ -343,7 +343,7 @@ class AioBucket(_AioBase):
 
         params = {} if params is None else params
         if process:
-            params.update({Bucket.PROCESS: process})
+            params[Bucket.PROCESS] = process
 
         resp = await self._do_object(
             "GET", key, headers=headers_dict, params=params
@@ -492,7 +492,7 @@ class AioBucket(_AioBase):
         return True
 
     async def get_bucket_info(self) -> GetBucketInfoResult:
-        """Get bucket infomation, `Create time`, `Endpoint`, `Owner`, `ACL`
+        """Get bucket information, `Create time`, `Endpoint`, `Owner`, `ACL`
 
         (use case) ::
             >>> resp = await aiobucket.get_bucket_info()
@@ -567,7 +567,7 @@ class AioBucket(_AioBase):
         self,
         key: str,
         filename: str,
-        headers: Optional[Dict] = None,
+        headers: Optional[Mapping] = None,
         progress_callback: Optional[Callable] = None,
     ) -> "PutObjectResult":
         """Upload a local file to a oss key
@@ -575,7 +575,7 @@ class AioBucket(_AioBase):
         (use case) ::
             >>> with open("file") as f:
             >>>     print(f.read())
-            "hellow world"
+            "hello world"
             >>> result = await aiobucket.put_object_from_file("object1",
                 "file")
             >>> async with await bucket.get_object("object1") as result
@@ -585,7 +585,7 @@ class AioBucket(_AioBase):
         Args:
             key (str): key of the oss
             filename (str): filename to upload
-            headers (Optional[Dict], optional): HTTP headers to specify.
+            headers (Optional[Mapping], optional): HTTP headers to specify.
             progress_callback (Optional[Callable], optional): callback function
                 for progress bar.
 
@@ -609,7 +609,7 @@ class AioBucket(_AioBase):
         headers: Optional[Union[Dict, CaseInsensitiveDict]] = None,
         progress_callback: Optional[Callable] = None,
         process: Optional[Callable] = None,
-        params: Optional[Dict] = None,
+        params: Optional[Union[Dict, CaseInsensitiveDict]] = None,
     ) -> AioGetObjectResult:
         """Download contents of object to file.
 
@@ -617,7 +617,7 @@ class AioBucket(_AioBase):
             >>> result = await aiobucket.get_object_to_file("object1", "file")
             >>> with open("file") as f:
             >>>     print(f.read())
-            "hellow world"
+            "hello world"
 
         Args:
             key (str): object name to download.
@@ -628,7 +628,7 @@ class AioBucket(_AioBase):
             progress_callback (Optional[Callable], optional): callback function
                 for progress bar.
             process (_type_, optional): oss file process method.
-            params (Optional[Dict], optional):
+            params (Optional[Union[Dict, CaseInsensitiveDict]], optional):
 
         Returns:
             AioGetObjectResult:
@@ -644,7 +644,7 @@ class AioBucket(_AioBase):
             )
 
             if result.content_length is None:
-                shutil.copyfileobj(result, f_w)
+                copyfileobj(result, f_w)
             else:
                 await copyfileobj_and_verify(
                     result,
@@ -705,15 +705,15 @@ class AioBucket(_AioBase):
 
         data = to_batch_delete_objects_request(key_list, False)
 
-        headers = CaseInsensitiveDict(headers)
-        headers["Content-MD5"] = content_md5(data)
+        header_dict: CaseInsensitiveDict = CaseInsensitiveDict(headers)
+        header_dict["Content-MD5"] = content_md5(data)
 
         resp = await self._do_object(
             "POST",
             "",
             data=data,
             params={"delete": "", "encoding-type": "url"},
-            headers=headers,
+            headers=header_dict,
         )
         return await self._parse_result(
             resp, parse_batch_delete_objects, BatchDeleteObjectsResult
@@ -775,7 +775,7 @@ class AioBucket(_AioBase):
         self,
         key: str,
         headers: Optional[Union[Dict, CaseInsensitiveDict]] = None,
-        params: Optional[Dict] = None,
+        params: Optional[Mapping] = None,
     ) -> "HeadObjectResult":
         """Get object metadata
 
@@ -787,7 +787,7 @@ class AioBucket(_AioBase):
             key (str): object key
             headers (Optional[Union[Dict, CaseInsensitiveDict]], optional):
                 HTTP headers to specify.
-            params (Optional[Dict], optional):
+            params (Optional[Mapping], optional):
 
         Returns:
             HeadObjectResult:
@@ -878,7 +878,7 @@ class AioService(_AioBase):
 
         Args:
             auth (Union[Auth, AnonymousAuth, StsAuth]): Auth class.
-            endpoint (str): enpoint address or CNAME.
+            endpoint (str): endpoint address or CNAME.
             session (Optional[AioSession], optional): reuse a custom session.
             connect_timeout (int): connection.
             app_name (str, optional): app name.
