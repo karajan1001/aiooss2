@@ -3,9 +3,7 @@ Module for exceptions classes used in aiooss2
 """
 
 from oss2.exceptions import _OSS_ERROR_TO_EXCEPTION
-from oss2.exceptions import (
-    InvalidEncryptionRequest as _InvalidEncryptionRequest,
-)
+from oss2.exceptions import InvalidEncryptionRequest as _InvalidEncryptionRequest
 from oss2.exceptions import ServerError, _parse_error_body
 
 

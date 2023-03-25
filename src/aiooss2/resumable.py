@@ -4,15 +4,7 @@ Module for resumable operations
 import asyncio
 import logging
 import os
-from typing import (
-    TYPE_CHECKING,
-    Callable,
-    Collection,
-    Dict,
-    Mapping,
-    Optional,
-    Union,
-)
+from typing import TYPE_CHECKING, Callable, Collection, Dict, Mapping, Optional, Union
 
 from oss2 import Bucket, CryptoBucket
 from oss2.compat import to_string, to_unicode
@@ -31,11 +23,7 @@ from oss2.headers import (
     OSS_TRAFFIC_LIMIT,
 )
 from oss2.http import CaseInsensitiveDict
-from oss2.models import (
-    ContentCryptoMaterial,
-    MultipartUploadCryptoContext,
-    PartInfo,
-)
+from oss2.models import ContentCryptoMaterial, MultipartUploadCryptoContext, PartInfo
 from oss2.resumable import (
     ResumableStore,
     _filter_invalid_headers,
@@ -221,12 +209,8 @@ async def resumable_download(  # pylint: disable=too-many-arguments
     valid_headers = _populate_valid_headers(
         headers, [OSS_REQUEST_PAYER, OSS_TRAFFIC_LIMIT]
     )
-    result = await bucket.head_object(
-        key_str, params=params, headers=valid_headers
-    )
-    logger.debug(
-        "The size of object to download is: %s", result.content_length
-    )
+    result = await bucket.head_object(key_str, params=params, headers=valid_headers)
+    logger.debug("The size of object to download is: %s", result.content_length)
     if result.content_length >= multiget_threshold:
         downloader = ResumableDownloader(
             bucket,
@@ -266,9 +250,9 @@ class ResumableUploader(_ResumableUploader):
         """
         await self._load_record()
 
-        parts_to_upload: Collection[
-            "_PartToProcess"
-        ] = self.__get_parts_to_upload(self.__finished_parts)
+        parts_to_upload: Collection["_PartToProcess"] = self.__get_parts_to_upload(
+            self.__finished_parts
+        )
         parts_to_upload = sorted(parts_to_upload, key=lambda p: p.part_number)
         logger.debug("Parts need to upload: %s", parts_to_upload)
 
@@ -341,9 +325,7 @@ class ResumableUploader(_ResumableUploader):
 
     def _verify_record(self, record: Optional[Dict]):
         if record and not self.__is_record_sane(record):
-            logger.warning(
-                "The content of record is invalid, delete the record"
-            )
+            logger.warning("The content of record is invalid, delete the record")
             self._del_record()
             return None
 
@@ -385,9 +367,7 @@ class ResumableUploader(_ResumableUploader):
                 material_record = {
                     "wrap_alg": material.wrap_alg,
                     "cek_alg": material.cek_alg,
-                    "encrypted_key": b64encode_as_string(
-                        material.encrypted_key
-                    ),
+                    "encrypted_key": b64encode_as_string(material.encrypted_key),
                     "encrypted_iv": b64encode_as_string(material.encrypted_iv),
                     "mat_desc": material.mat_desc,
                 }
@@ -412,8 +392,7 @@ class ResumableUploader(_ResumableUploader):
             record["content_crypto_material"] = material_record
 
         logger.debug(
-            "Add new record, bucket: %s, key: %s, upload_id: %s, "
-            "part_size: %d",
+            "Add new record, bucket: %s, key: %s, upload_id: %s, part_size: %d",
             self.bucket.bucket_name,
             self.key,
             upload_id,

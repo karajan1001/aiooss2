@@ -5,16 +5,7 @@ Module for multipart operations
 # pylint: disable=too-many-arguments
 
 import logging
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Dict,
-    List,
-    Optional,
-    Sequence,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Sequence, Union
 
 from oss2.api import Bucket, _make_range_string
 from oss2.compat import urlquote
@@ -74,9 +65,7 @@ async def init_multipart_upload(
 
     tmp_params["uploads"] = ""
     logger.debug("Start to init multipart upload")
-    resp = await self._do_object(
-        "POST", key, params=tmp_params, headers=headers
-    )
+    resp = await self._do_object("POST", key, params=tmp_params, headers=headers)
     logger.debug("Init multipart upload done")
     return await self._parse_result(
         resp, parse_init_multipart_upload, InitMultipartUploadResult
@@ -174,9 +163,7 @@ async def complete_multipart_upload(
 
     if self.enable_crc and parts is not None:
         object_crc = calc_obj_crc_from_parts(parts)
-        check_crc(
-            "multipart upload", object_crc, result.crc, result.request_id
-        )
+        check_crc("multipart upload", object_crc, result.crc, result.request_id)
 
     return result
 
@@ -317,9 +304,7 @@ async def upload_part_copy(
     parameters["uploadId"] = target_upload_id
     parameters["partNumber"] = str(target_part_number)
 
-    resp = await self._do_object(
-        "PUT", target_key, params=parameters, headers=headers
-    )
+    resp = await self._do_object("PUT", target_key, params=parameters, headers=headers)
     logger.debug("Upload part copy done")
 
     return PutObjectResult(resp)

@@ -23,7 +23,6 @@ async def async_go():
     async with AioBucket(
         auth, "http://oss-cn-hangzhou.aliyuncs.com", BUCKET_NAME
     ) as bucket:
-
         # upload object to oss
         data = b"\x01" * 1024
         resp = await bucket.put_object(data_obj, data)

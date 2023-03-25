@@ -100,7 +100,6 @@ class AioObjectIterator(_AioBaseIterator):
         self.headers = http.CaseInsensitiveDict(headers)
 
     async def _fetch(self):
-
         result: ListObjectsResult = await self.bucket.list_objects(
             prefix=self.prefix,
             delimiter=self.delimiter,

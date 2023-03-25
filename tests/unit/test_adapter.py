@@ -11,11 +11,7 @@ from unittest.mock import Mock
 import pytest
 from aiohttp.streams import StreamReader
 
-from aiooss2.adapter import (
-    FilelikeObjectAdapter,
-    IterableAdapter,
-    SliceableAdapter,
-)
+from aiooss2.adapter import FilelikeObjectAdapter, IterableAdapter, SliceableAdapter
 from aiooss2.utils import make_adapter
 
 if TYPE_CHECKING:
@@ -137,9 +133,7 @@ def test_make_adapter(
 
 def test_make_adapter_error():
     with pytest.raises(ValueError):
-        assert make_adapter(
-            ["data1", "data2", "data3"], discard=1, enable_crc=True
-        )
+        assert make_adapter(["data1", "data2", "data3"], discard=1, enable_crc=True)
 
 
 def test_adapter_read(

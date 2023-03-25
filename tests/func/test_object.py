@@ -84,9 +84,7 @@ def test_delete_object(bucket: "AioBucket", oss2_bucket: "Bucket", test_path):
     object_name = f"{test_path}/{function_name}"
 
     oss2_bucket.put_object(object_name, data)
-    file_list = [
-        obj.key for obj in ObjectIterator(oss2_bucket, prefix=object_name)
-    ]
+    file_list = [obj.key for obj in ObjectIterator(oss2_bucket, prefix=object_name)]
     assert object_name in file_list
 
     async def delete_obj(object_name):
@@ -95,15 +93,11 @@ def test_delete_object(bucket: "AioBucket", oss2_bucket: "Bucket", test_path):
 
     asyncio.run(delete_obj(object_name))
 
-    file_list = [
-        obj.key for obj in ObjectIterator(oss2_bucket, prefix=object_name)
-    ]
+    file_list = [obj.key for obj in ObjectIterator(oss2_bucket, prefix=object_name)]
     assert object_name not in file_list
 
 
-def test_get_object_meta(
-    bucket: "AioBucket", oss2_bucket: "Bucket", number_file
-):
+def test_get_object_meta(bucket: "AioBucket", oss2_bucket: "Bucket", number_file):
     async def get_object_meta(object_name):
         async with bucket as aiobucket:
             return await aiobucket.get_object_meta(object_name)
@@ -200,9 +194,7 @@ def test_get_object_to_file(
     assert file.read_binary() == NUMBERS
 
 
-def test_batch_delete_objects(
-    bucket: "AioBucket", oss2_bucket: "Bucket", test_path
-):
+def test_batch_delete_objects(bucket: "AioBucket", oss2_bucket: "Bucket", test_path):
     data = b"\x01" * 2
     function_name = inspect.stack()[0][0].f_code.co_name
     object_path = f"{test_path}/{function_name}"
@@ -242,9 +234,9 @@ def test_copy_objects(
             return await aiobucket.copy_object(bucket_name, file_from, file_to)
 
     asyncio.run(copy_objects(number_file, object_path))
-    assert [
-        obj.key for obj in ObjectIterator(oss2_bucket, prefix=object_path)
-    ] == [object_path]
+    assert [obj.key for obj in ObjectIterator(oss2_bucket, prefix=object_path)] == [
+        object_path
+    ]
     assert oss2_bucket.get_object(object_path).read() == NUMBERS
 
 
@@ -266,8 +258,7 @@ def test_put_object_from_middle_of_file(
         result = asyncio.run(put(object_name, f_r))
     assert result.resp.status == 200
     assert (
-        oss2_bucket.get_object(object_name).read()
-        == data.strip() + os.linesep.encode()
+        oss2_bucket.get_object(object_name).read() == data.strip() + os.linesep.encode()
     )
 
 
