@@ -92,13 +92,9 @@ class StreamAdapter(ABC):
             )
         self.discard -= real_discard
 
-        _invoke_progress_callback(
-            self.progress_callback, self.offset, self.size
-        )
+        _invoke_progress_callback(self.progress_callback, self.offset, self.size)
         _invoke_crc_callback(self.crc_callback, content, real_discard)
-        content = _invoke_cipher_callback(
-            self.cipher_callback, content, real_discard
-        )
+        content = _invoke_cipher_callback(self.cipher_callback, content, real_discard)
 
         return content
 
@@ -184,8 +180,7 @@ class IterableAdapter(StreamAdapter):
         super().__init__(stream, **kwargs)
         if discard:
             raise ValueError(
-                "discard not supported in Async "
-                f"Iterable input {self.stream}"
+                "discard not supported in Async " f"Iterable input {self.stream}"
             )
 
     async def read(self, amt: int = -1) -> bytes:

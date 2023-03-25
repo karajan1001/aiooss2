@@ -106,8 +106,7 @@ class _AioBase:  # pylint: disable=too-few-public-methods
         self.endpoint = _normalize_endpoint(endpoint.strip())
         if is_valid_endpoint(self.endpoint) is not True:
             raise ClientError(
-                "The endpoint you has specified is not valid, "
-                f"endpoint: {endpoint}"
+                "The endpoint you has specified is not valid, " f"endpoint: {endpoint}"
             )
         self.session = session
         self.timeout = connect_timeout or defaults.connect_timeout
@@ -130,7 +129,6 @@ class _AioBase:  # pylint: disable=too-few-public-methods
     async def _do(
         self, method: str, bucket_name: str, key: Union[bytes, str], **kwargs
     ) -> "AioResponse":
-
         key = to_string(key)
         req = Request(
             method,
@@ -143,9 +141,7 @@ class _AioBase:  # pylint: disable=too-few-public-methods
         )
 
         assert self.session
-        resp: "AioResponse" = await self.session.do_request(
-            req, timeout=self.timeout
-        )
+        resp: "AioResponse" = await self.session.do_request(req, timeout=self.timeout)
 
         logger.debug(
             "Responses from the server, req_id: %s, status_code: %d",
@@ -174,9 +170,7 @@ class _AioBase:  # pylint: disable=too-few-public-methods
             proxies=self.proxies,
             **kwargs,
         )
-        resp: "AioResponse" = await self.session.do_request(
-            req, timeout=self.timeout
-        )
+        resp: "AioResponse" = await self.session.do_request(req, timeout=self.timeout)
         if resp.status // 100 != 2:
             err = await make_exception(resp)
             logger.info("Exception: %s", err)
@@ -191,9 +185,7 @@ class _AioBase:  # pylint: disable=too-few-public-methods
         return resp
 
     @staticmethod
-    async def _parse_result(
-        resp: "AioResponse", parse_func: Callable, klass: Type
-    ):
+    async def _parse_result(resp: "AioResponse", parse_func: Callable, klass: Type):
         result = klass(resp)
         parse_func(result, await resp.read())
         return result
@@ -345,9 +337,7 @@ class AioBucket(_AioBase):
         if process:
             params[Bucket.PROCESS] = process
 
-        resp = await self._do_object(
-            "GET", key, headers=headers_dict, params=params
-        )
+        resp = await self._do_object("GET", key, headers=headers_dict, params=params)
         logger.debug("Get object done")
 
         return AioGetObjectResult(resp, progress_callback, self.enable_crc)
@@ -379,9 +369,7 @@ class AioBucket(_AioBase):
             RequestResult:
         """
 
-        resp = await self._do_object(
-            "DELETE", key, params=params, headers=headers
-        )
+        resp = await self._do_object("DELETE", key, params=params, headers=headers)
         logger.debug("Delete object done")
         return RequestResult(resp)
 
@@ -425,9 +413,7 @@ class AioBucket(_AioBase):
             headers=headers,
         )
         logger.debug("List objects done")
-        return await self._parse_result(
-            resp, parse_list_objects, ListObjectsResult
-        )
+        return await self._parse_result(resp, parse_list_objects, ListObjectsResult)
 
     async def get_object_meta(
         self,
@@ -458,15 +444,11 @@ class AioBucket(_AioBase):
         if Bucket.OBJECTMETA not in params:
             params[Bucket.OBJECTMETA] = ""
 
-        resp = await self._do_object(
-            "GET", key, params=params, headers=headers
-        )
+        resp = await self._do_object("GET", key, params=params, headers=headers)
         logger.debug("Get object metadata done")
         return GetObjectMetaResult(resp)
 
-    async def object_exists(
-        self, key: str, headers: Optional[Dict] = None
-    ) -> bool:
+    async def object_exists(self, key: str, headers: Optional[Dict] = None) -> bool:
         """Return True if key exists, False otherwise. raise Exception
         for other exceptions.
 
@@ -803,18 +785,14 @@ class AioBucket(_AioBase):
             headers,
         )
 
-        resp = await self._do_object(
-            "HEAD", key, headers=headers, params=params
-        )
+        resp = await self._do_object("HEAD", key, headers=headers, params=params)
 
         logger.debug(
             "Head object done, req_id: %s, status_code: %s",
             resp.request_id,
             resp.status,
         )
-        return await self._parse_result(
-            resp, parse_dummy_result, HeadObjectResult
-        )
+        return await self._parse_result(resp, parse_dummy_result, HeadObjectResult)
 
     async def abort_multipart_upload(
         self: "AioBucket", *args, **kwargs
@@ -842,21 +820,15 @@ class AioBucket(_AioBase):
         """List multipart uploading process"""
         return await list_multipart_uploads(self, *args, **kwargs)
 
-    async def list_parts(
-        self: "AioBucket", *args, **kwargs
-    ) -> ListPartsResult:
+    async def list_parts(self: "AioBucket", *args, **kwargs) -> ListPartsResult:
         """list uploaded parts in a part uploading progress."""
         return await list_parts(self, *args, **kwargs)
 
-    async def upload_part(
-        self: "AioBucket", *args, **kwargs
-    ) -> PutObjectResult:
+    async def upload_part(self: "AioBucket", *args, **kwargs) -> PutObjectResult:
         """upload single part."""
         return await upload_part(self, *args, **kwargs)
 
-    async def upload_part_copy(
-        self: "AioBucket", *args, **kwargs
-    ) -> PutObjectResult:
+    async def upload_part_copy(self: "AioBucket", *args, **kwargs) -> PutObjectResult:
         """copy part or whole of a source file to a slice of a target file."""
         return await upload_part_copy(self, *args, **kwargs)
 
@@ -933,6 +905,4 @@ class AioService(_AioBase):
 
         resp = await self._do("GET", "", "", params=list_param)
         logger.debug("List buckets done")
-        return await self._parse_result(
-            resp, parse_list_buckets, ListBucketsResult
-        )
+        return await self._parse_result(resp, parse_list_buckets, ListBucketsResult)

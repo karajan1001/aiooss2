@@ -15,9 +15,7 @@ from oss2 import Bucket, Service
 from aiooss2 import AioBucket, AioService, Auth
 
 PORT = 5555
-LICENSE_PATH = os.path.join(
-    pathlib.Path(__file__).parent.parent.resolve(), "LICENSE"
-)
+LICENSE_PATH = os.path.join(pathlib.Path(__file__).parent.parent.resolve(), "LICENSE")
 NUMBERS = b"1234567890\n"
 
 
@@ -63,7 +61,6 @@ def oss_emulator_server_start(emulator_endpoint):
     Start a local emulator server
     """
     with subprocess.Popen(f"ruby bin/emulator -r store -p {PORT}"):
-
         try:
             result = requests.get(emulator_endpoint, timeout=5)
             if result.ok:

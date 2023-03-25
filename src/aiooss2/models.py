@@ -71,29 +71,21 @@ class AioGetObjectResult(HeadObjectResult):
 
         if content_crypto_material.is_unencrypted():
             logger.info(
-                "The object is not encrypted, "
-                "use crypto provider is not recommended"
+                "The object is not encrypted, use crypto provider is not recommended"
             )
         else:
             crypto_provider = self.__crypto_provider
-            if (
-                content_crypto_material.mat_desc
-                != self.__crypto_provider.mat_desc
-            ):
+            if content_crypto_material.mat_desc != self.__crypto_provider.mat_desc:
                 logger.warning(
                     "The material description of the object "
                     "and the provider is inconsistent"
                 )
-                encryption_materials = (
-                    self.__crypto_provider.get_encryption_materials(
-                        content_crypto_material.mat_desc
-                    )
+                encryption_materials = self.__crypto_provider.get_encryption_materials(
+                    content_crypto_material.mat_desc
                 )
                 if encryption_materials:
-                    crypto_provider = (
-                        self.__crypto_provider.reset_encryption_materials(
-                            encryption_materials
-                        )
+                    crypto_provider = self.__crypto_provider.reset_encryption_materials(
+                        encryption_materials
                     )
                 else:
                     raise ClientError(
@@ -124,9 +116,7 @@ class AioGetObjectResult(HeadObjectResult):
 
             offset = 0
             if self.content_range:
-                start, _ = crypto_provider.adjust_range(
-                    byte_range[0], byte_range[1]
-                )
+                start, _ = crypto_provider.adjust_range(byte_range[0], byte_range[1])
                 offset = content_crypto_material.cipher.calc_offset(start)
 
             cipher = copy.copy(content_crypto_material.cipher)

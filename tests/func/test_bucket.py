@@ -10,15 +10,12 @@ from oss2 import BucketIterator
 from aiooss2 import AioBucketIterator
 
 if TYPE_CHECKING:
-
     from oss2 import Service
 
     from aiooss2 import AioService
 
 
-def test_list_bucket(
-    service: "AioService", oss2_service: "Service", bucket_name
-):
+def test_list_bucket(service: "AioService", oss2_service: "Service", bucket_name):
     async def list_bucket():
         async with service as aioservice:
             result = []
