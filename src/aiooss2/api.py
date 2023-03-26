@@ -238,7 +238,9 @@ class AioBucket(_AioBase):
         """
         self.bucket_name = bucket_name.strip()
         if is_valid_bucket_name(self.bucket_name) is not True:
-            raise ClientError("The bucket_name is invalid, please check it.")
+            raise ClientError(
+                f"The bucket_name '{self.bucket_name}' is invalid, please check it."
+            )
         super().__init__(
             auth,
             endpoint,
