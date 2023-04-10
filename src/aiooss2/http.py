@@ -41,7 +41,8 @@ class Request:  # pylint: disable=too-few-public-methods
         else:
             self.headers = headers
 
-        self.headers["Content-Type"] = "application/octet-stream"
+        if "Content-Type" not in self.headers:
+            self.headers["Content-Type"] = "application/octet-stream"
         if "User-Agent" not in self.headers:
             if app_name:
                 self.headers["User-Agent"] = USER_AGENT + "/" + app_name
