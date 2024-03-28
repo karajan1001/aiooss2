@@ -114,7 +114,7 @@ class _AioBase:  # pylint: disable=too-few-public-methods
         self.enable_crc = enable_crc
         self.proxies = proxies
 
-        self._make_url = _UrlMaker(self.endpoint, is_cname)
+        self._make_url = _UrlMaker(self.endpoint, is_cname, False)
         logger.debug(
             "Init endpoint: %s, isCname: %s, connect_timeout: %s, "
             "app_name: %s, enabled_crc: %s, proxies: %s",
